@@ -18,20 +18,13 @@ redirect_urls = [
 api_version = "2026-07"
 
 [[webhooks.subscriptions]]
-topics = ["orders/create", "orders/update", "orders/fulfilled"]
-url = "/webhooks"
-
-[[webhooks.subscriptions]]
 topics = ["products/create", "products/update", "products/delete"]
-url = "/webhooks"
-
-[[webhooks.subscriptions]]
-topics = ["customers/create", "customers/update"]
-url = "/webhooks"
+uri = "https://mts-ai-business-intelligence.myshopifyapps.com/webhooks"
 
 [app_proxy]
 url = "https://mts-ai-business-intelligence.myshopifyapps.com/api/proxy"
-prefix = "mts-ai-bi"
+subpath = "apps"
+prefix = "apps"
 
 [build]
 automatically_update_urls_on_dev = true
