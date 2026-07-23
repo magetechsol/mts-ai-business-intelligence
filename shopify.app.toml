@@ -4,27 +4,23 @@ handle = "mts-ai-business-intelligence"
 application_url = "https://mts-ai-business-intelligence.myshopifyapps.com"
 embedded = true
 
-[access_scopes]
-scopes = "read_orders,read_products,read_customers,read_inventory,read_analytics,read_content"
-
-[auth]
-redirect_urls = [
-  "https://mts-ai-business-intelligence.myshopifyapps.com/auth/callback",
-  "https://mts-ai-business-intelligence.myshopifyapps.com/auth/shopify/callback",
-  "https://mts-ai-business-intelligence.myshopifyapps.com/api/auth/callback"
-]
+[build]
+automatically_update_urls_on_dev = true
 
 [webhooks]
 api_version = "2026-07"
 
 [[webhooks.subscriptions]]
 topics = ["products/create", "products/update", "products/delete"]
-uri = "https://mts-ai-business-intelligence.myshopifyapps.com/webhooks"
+uri = "/webhooks"
+
+[access_scopes]
+scopes = "read_analytics,read_content,read_customers,read_inventory,read_orders,read_products"
+
+[auth]
+redirect_urls = []
 
 [app_proxy]
 url = "https://mts-ai-business-intelligence.myshopifyapps.com/api/proxy"
 subpath = "apps"
 prefix = "apps"
-
-[build]
-automatically_update_urls_on_dev = true
