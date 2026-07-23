@@ -21,6 +21,7 @@ import {
   useLocation,
   useLoaderData,
   useRouteError,
+  isRouteErrorResponse,
 } from "react-router";
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
@@ -182,5 +183,20 @@ export default function AppLayout() {
 }
 
 export function ErrorBoundary() {
-  return boundary.error(useRouteError());
+  const error = useRouteError();
+
+  if (isRouteErrorResponse(error)) {
+    if (error.status === 200 && typeof error.data === "string") {
+      return <div dangerouslySetInnerHTML={{ __html: error.data }} />;
+    }
+
+    return (
+      <div style={{ padding: 20 }}>
+        <h1>Error {error.status}</h1>
+        <p>{error.statusText}</p>
+      </div>
+    );
+  }
+
+  throw error;
 }
