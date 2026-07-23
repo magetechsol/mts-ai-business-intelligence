@@ -1,15 +1,15 @@
-import { shopApp } from "@shopify/shopify-app-react-router/server";
+import { shopifyApp } from "@shopify/shopify-app-react-router/server";
 import { PrismaSessionStorage } from "@shopify/shopify-app-session-storage-prisma";
 import prisma from "./db.server";
 
-let app: ReturnType<typeof shopApp>;
+let app: ReturnType<typeof shopifyApp>;
 
 declare global {
-  var shopifyAppGlobal: ReturnType<typeof shopApp> | undefined;
+  var shopifyAppGlobal: ReturnType<typeof shopifyApp> | undefined;
 }
 
 function createApp() {
-  return shopApp({
+  return shopifyApp({
     apiKey: process.env.SHOPIFY_API_KEY!,
     apiSecretKey: process.env.SHOPIFY_API_SECRET!,
     scopes: (process.env.SCOPES || "").split(","),
