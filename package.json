@@ -7,7 +7,7 @@
     "build": "react-router build",
     "dev": "shopify app dev",
     "setup": "prisma generate && prisma db push",
-    "start": "shopify app start",
+    "start": "react-router-serve ./build/server/index.js",
     "lint": "eslint --ignore-path .gitignore .",
     "prisma": "prisma",
     "shopify": "shopify"
@@ -15,6 +15,7 @@
   "dependencies": {
     "@prisma/client": "^6.6.0",
     "@react-router/node": "^7.18.0",
+    "@react-router/serve": "^7.18.1",
     "@shopify/polaris": "^13.9.0",
     "@shopify/polaris-icons": "^9.3.0",
     "@shopify/shopify-app-react-router": "^1.2.0",
