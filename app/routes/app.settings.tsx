@@ -2,7 +2,8 @@ import { Box, Layout, Text, Card, Banner, Button, TextField, BlockStack } from "
 
 import { useState } from "react";
 import { useLoaderData, useFetcher } from "react-router";
-import type { LoaderFunctionArgs, ActionFunctionArgs } from "react-router";
+import type { HeadersFunction, LoaderFunctionArgs, ActionFunctionArgs } from "react-router";
+import { boundary } from "@shopify/shopify-app-react-router/server";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const { authenticate } = await import("~/shopify.server");
@@ -133,3 +134,7 @@ export default function SettingsPage() {
     </Box>
   );
 }
+
+export const headers: HeadersFunction = (headersArgs) => {
+  return boundary.headers(headersArgs);
+};

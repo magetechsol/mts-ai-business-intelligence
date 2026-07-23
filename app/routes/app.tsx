@@ -1,4 +1,10 @@
-import { Navigation, TopBar, AppProvider, Frame, Toast, Button } from "@shopify/polaris";
+import {
+  Navigation,
+  TopBar,
+  Frame,
+  Toast,
+  Button,
+} from "@shopify/polaris";
 import {
   HomeIcon,
   OrderIcon,
@@ -10,24 +16,26 @@ import {
   RefreshIcon,
 } from "@shopify/polaris-icons";
 import { useState, useCallback } from "react";
-import { Outlet, useLocation, useLoaderData } from "react-router";
-import type { LoaderFunctionArgs } from "react-router";
+import {
+  Outlet,
+  useLocation,
+  useLoaderData,
+  useRouteError,
+} from "react-router";
+import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
+import { boundary } from "@shopify/shopify-app-react-router/server";
+import { AppProvider } from "@shopify/shopify-app-react-router/react";
 
-export async function loader({ request }: LoaderFunctionArgs) {
-  const { authenticate } = await import("~/shopify.server");
-  const { default: prisma } = await import("~/db.server");
+import { authenticate } from "~/shopify.server";
 
-  const { session } = await authenticate.admin(request);
-  const shopId = session.shop;
+export const loader = async ({ request }: LoaderFunctionArgs) => {
+  await authenticate.admin(request);
+  return { apiKey: process.env.SHOPIFY_API_KEY || "" };
+};
 
-  const settings = await prisma.appSettings.findUnique({ where: { shopId } });
-
-  return {
-    shopId,
-    shopName: session.shop,
-    lastSyncAt: settings?.lastSyncAt?.toISOString() || null,
-  };
-}
+export const headers: HeadersFunction = (headersArgs) => {
+  return boundary.headers(headersArgs);
+};
 
 const navItems = [
   { label: "Dashboard", href: "/app", icon: HomeIcon },
@@ -92,7 +100,7 @@ const i18n = {
 
 export default function AppLayout() {
   const location = useLocation();
-  const { shopName } = useLoaderData<typeof loader>();
+  const { apiKey } = useLoaderData<typeof loader>();
 
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [toastActive, setToastActive] = useState(false);
@@ -142,7 +150,7 @@ export default function AppLayout() {
       onNavigationToggle={toggleMobileNav}
       userMenu={{
         actions: [{ items: [{ content: "Settings", url: "/app/settings" }] }],
-        details: { name: shopName },
+        details: { name: "" },
         open: userMenuOpen,
         onToggle: toggleUserMenu,
       }}
@@ -153,7 +161,7 @@ export default function AppLayout() {
   );
 
   return (
-    <AppProvider i18n={i18n}>
+    <AppProvider embedded apiKey={apiKey} i18n={i18n}>
       <Frame
         topBar={topBarMarkup}
         navigation={navigationMarkup}
@@ -171,4 +179,8 @@ export default function AppLayout() {
       </Frame>
     </AppProvider>
   );
+}
+
+export function ErrorBoundary() {
+  return boundary.error(useRouteError());
 }

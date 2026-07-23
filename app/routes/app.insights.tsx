@@ -12,7 +12,8 @@ import {
 
 import { useState, useRef, useEffect } from "react";
 import { useLoaderData, useFetcher } from "react-router";
-import type { LoaderFunctionArgs, ActionFunctionArgs } from "react-router";
+import type { HeadersFunction, LoaderFunctionArgs, ActionFunctionArgs } from "react-router";
+import { boundary } from "@shopify/shopify-app-react-router/server";
 
 const SUGGESTED_QUESTIONS = [
   "Which products generated the most revenue this month?",
@@ -361,3 +362,7 @@ export default function InsightsPage() {
     </Box>
   );
 }
+
+export const headers: HeadersFunction = (headersArgs) => {
+  return boundary.headers(headersArgs);
+};

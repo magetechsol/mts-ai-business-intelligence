@@ -15,7 +15,8 @@ import {
 } from "recharts";
 import { useState, useMemo } from "react";
 import { useLoaderData } from "react-router";
-import type { LoaderFunctionArgs } from "react-router";
+import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
+import { boundary } from "@shopify/shopify-app-react-router/server";
 
 const COLORS = ["#503ceb", "#4bb550", "#E4910B", "#D72C0D", "#503ceb", "#503ceb"];
 
@@ -198,3 +199,7 @@ export default function SalesPage() {
     </Box>
   );
 }
+
+export const headers: HeadersFunction = (headersArgs) => {
+  return boundary.headers(headersArgs);
+};

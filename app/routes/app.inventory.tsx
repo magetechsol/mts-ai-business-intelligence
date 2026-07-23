@@ -13,7 +13,8 @@ import {
 } from "recharts";
 import { useMemo } from "react";
 import { useLoaderData } from "react-router";
-import type { LoaderFunctionArgs } from "react-router";
+import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
+import { boundary } from "@shopify/shopify-app-react-router/server";
 
 const COLORS: Record<string, string> = {
   in_stock: "#4bb550",
@@ -174,3 +175,7 @@ export default function InventoryPage() {
     </Box>
   );
 }
+
+export const headers: HeadersFunction = (headersArgs) => {
+  return boundary.headers(headersArgs);
+};
