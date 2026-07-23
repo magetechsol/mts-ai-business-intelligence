@@ -3,6 +3,8 @@ import { route, index, layout } from "@react-router/dev/routes";
 
 export default [
   index("routes/_index.tsx"),
+  route("auth", "routes/auth.tsx"),
+  route("auth/callback", "routes/auth.callback.tsx"),
   layout("routes/app.tsx", [
     route("app", "routes/app._index.tsx"),
     route("app/sales", "routes/app.sales.tsx"),
