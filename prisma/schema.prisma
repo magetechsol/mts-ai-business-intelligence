@@ -1,0 +1,158 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Session {
+  id           String   @id
+  shop         String
+  state        String
+  scope        String?
+  expires      DateTime?
+  accessToken  String
+  userId       BigInt?
+  accountOwner Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  users        User[]
+}
+
+model User {
+  id        BigInt   @id @default(autoincrement())
+  email     String
+  accounts  Account[]
+  sessions  Session[]
+}
+
+model Account {
+  id      BigInt @id @default(autoincrement())
+  userId  BigInt
+  user    User   @relation(fields: [userId], references: [id])
+}
+
+model SyncedOrder {
+  id                 String   @id
+  shopId             String
+  name               String
+  email              String?
+  createdAt          DateTime
+  processedAt        DateTime?
+  financialStatus    String?
+  fulfillmentStatus  String?
+  totalPrice         Float
+  subtotalPrice      Float
+  totalTax           Float    @default(0)
+  totalDiscounts     Float    @default(0)
+  currency           String   @default("USD")
+  lineItemCount      Int      @default(0)
+  customerEmail      String?
+  tags               String?
+  syncedAt           DateTime @default(now())
+  lineItems          SyncedOrderItem[]
+
+  @@index([shopId, createdAt])
+  @@index([shopId, financialStatus])
+}
+
+model SyncedOrderItem {
+  id           String   @id
+  orderId      String
+  order        SyncedOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId    String?
+  productTitle  String?
+  variantId    String?
+  variantTitle  String?
+  sku          String?
+  quantity     Int
+  price        Float
+  syncedAt     DateTime @default(now())
+
+  @@index([orderId])
+  @@index([productId])
+}
+
+model SyncedProduct {
+  id             String   @id
+  shopId         String
+  title          String
+  vendor         String?
+  productType    String?
+  status         String?
+  createdAt      DateTime
+  updatedAt      DateTime
+  totalVariants  Int      @default(0)
+  imageCount     Int      @default(0)
+  tags           String?
+  syncedAt       DateTime @default(now())
+
+  variants       SyncedProductVariant[]
+
+  @@index([shopId])
+}
+
+model SyncedProductVariant {
+  id         String   @id
+  productId  String
+  product    SyncedProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
+  title      String
+  sku        String?
+  price      Float
+  inventory  Int      @default(0)
+  syncedAt   DateTime @default(now())
+}
+
+model SyncedCustomer {
+  id           String   @id
+  shopId       String
+  email        String?
+  firstName    String?
+  lastName     String?
+  ordersCount  Int      @default(0)
+  totalSpent   Float    @default(0)
+  createdAt    DateTime
+  updatedAt    DateTime
+  tags         String?
+  syncedAt     DateTime @default(now())
+
+  @@index([shopId])
+  @@index([shopId, totalSpent])
+}
+
+model AnalyticsSnapshot {
+  id            String   @id @default(cuid())
+  shopId        String
+  snapshotType  String
+  period        String
+  metricName    String
+  metricValue   Float
+  metadata      String?
+  createdAt     DateTime @default(now())
+
+  @@index([shopId, snapshotType, period, metricName])
+}
+
+model AiInsight {
+  id            String   @id @default(cuid())
+  shopId        String
+  insightType   String
+  question      String?
+  answer        String
+  data          String?
+  createdAt     DateTime @default(now())
+
+  @@index([shopId, insightType])
+}
+
+model AppSettings {
+  id            String   @id @default(cuid())
+  shopId        String   @unique
+  openaiKey     String?
+  syncEnabled   Boolean  @default(true)
+  lastSyncAt    DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}

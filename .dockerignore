@@ -1,0 +1,12 @@
+node_modules
+build
+.env
+.env.*
+.git
+.gitignore
+*.md
+*.log
+.cache
+.react-router
+prisma/dev.db
+prisma/dev.db-journal

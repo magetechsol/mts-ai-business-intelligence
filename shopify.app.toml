@@ -1,0 +1,37 @@
+client_id = "b730ee82136af4e66c8ef1ccc0bd05f9"
+name = "MTS AI Business Intelligence"
+handle = "mts-ai-business-intelligence"
+application_url = "https://mts-ai-business-intelligence.myshopifyapps.com/"
+embedded = true
+
+[access_scopes]
+scopes = "read_orders,read_products,read_customers,read_inventory,read_analytics,read_content"
+
+[auth]
+redirect_urls = [
+  "https://mts-ai-business-intelligence.myshopifyapps.com/auth/callback",
+  "https://mts-ai-business-intelligence.myshopifyapps.com/auth/shopify/callback",
+  "https://mts-ai-business-intelligence.myshopifyapps.com/api/auth/callback"
+]
+
+[webhooks]
+api_version = "2024-10"
+
+[[webhooks.subscriptions]]
+topics = ["orders/create", "orders/update", "orders/fulfilled"]
+url = "/webhooks"
+
+[[webhooks.subscriptions]]
+topics = ["products/create", "products/update", "products/delete"]
+url = "/webhooks"
+
+[[webhooks.subscriptions]]
+topics = ["customers/create", "customers/update"]
+url = "/webhooks"
+
+[app_proxy]
+url = "https://mts-ai-business-intelligence.myshopifyapps.com/api/proxy"
+prefix = "mts-ai-bi"
+
+[build]
+automatically_update_urls_on_dev = true
