@@ -31,15 +31,15 @@ import { authenticate } from "~/shopify.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   try {
-    await authenticate.admin(request);
-  } catch (e: any) {
-    if (e instanceof Response) {
-      throw e;
+    const { session } = await authenticate.admin(request);
+    return { apiKey: process.env.SHOPIFY_API_KEY || "", shop: session.shop };
+  } catch (error) {
+    if (error instanceof Response) {
+      throw error;
     }
-    console.error("Unexpected auth error:", e?.message || e);
+    console.error("Layout authenticate.admin error:", error);
     throw new Response("Authentication failed", { status: 401 });
   }
-  return { apiKey: process.env.SHOPIFY_API_KEY || "" };
 };
 
 export const headers: HeadersFunction = (headersArgs) => {

@@ -3,6 +3,15 @@ import { useLoaderData } from "react-router";
 import type { Route } from "./+types/auth";
 
 export async function loader({ request }: Route.LoaderArgs) {
+  const url = new URL(request.url);
+  const isCallback = url.pathname.endsWith("/callback");
+
+  if (isCallback) {
+    const { shopify } = await import("~/shopify.server");
+    const callback = await shopify.callback(request);
+    throw callback.redirectToShopifyOrAppRoot();
+  }
+
   const { authenticate } = await import("~/shopify.server");
   try {
     await authenticate.admin(request);

@@ -17,9 +17,47 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const { authenticate } = await import("~/shopify.server");
+  const { default: prisma } = await import("~/db.server");
 
-  const { session } = await authenticate.admin(request);
-  const shopId = session.shop;
+  let shopId = "";
+  try {
+    const { session } = await authenticate.admin(request);
+    shopId = session.shop;
+  } catch {
+    return {
+      shopId: "",
+      analytics: {
+        revenue: { label: "Total Revenue", value: "$0", change: 0, changeLabel: "No data", trend: "neutral" as const },
+        orders: { label: "Total Orders", value: "0", change: 0, changeLabel: "No data", trend: "neutral" as const },
+        averageOrderValue: { label: "Average Order Value", value: "$0", change: 0, changeLabel: "No data", trend: "neutral" as const },
+        customers: { label: "New Customers", value: "0", change: 0, changeLabel: "No data", trend: "neutral" as const },
+        repeatRate: { label: "Repeat Purchase Rate", value: "0%", change: 0, changeLabel: "No data", trend: "neutral" as const },
+        conversionRate: { label: "Conversion Rate", value: "N/A", change: 0, changeLabel: "No data", trend: "neutral" as const },
+        salesChart: [],
+        topProducts: [],
+        dailyBrief: null,
+      },
+      recentOrders: [] as any[],
+    };
+  }
+
+  if (!shopId) {
+    return {
+      shopId: "",
+      analytics: {
+        revenue: { label: "Total Revenue", value: "$0", change: 0, changeLabel: "No data", trend: "neutral" as const },
+        orders: { label: "Total Orders", value: "0", change: 0, changeLabel: "No data", trend: "neutral" as const },
+        averageOrderValue: { label: "Average Order Value", value: "$0", change: 0, changeLabel: "No data", trend: "neutral" as const },
+        customers: { label: "New Customers", value: "0", change: 0, changeLabel: "No data", trend: "neutral" as const },
+        repeatRate: { label: "Repeat Purchase Rate", value: "0%", change: 0, changeLabel: "No data", trend: "neutral" as const },
+        conversionRate: { label: "Conversion Rate", value: "N/A", change: 0, changeLabel: "No data", trend: "neutral" as const },
+        salesChart: [],
+        topProducts: [],
+        dailyBrief: null,
+      },
+      recentOrders: [] as any[],
+    };
+  }
 
   const endDate = new Date();
   const startDate = new Date();
@@ -30,7 +68,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   try {
     const { getFullAnalytics } = await import("~/lib/analytics.server");
-    const { default: prisma } = await import("~/db.server");
 
     analytics = await getFullAnalytics(shopId, {
       startDate,
@@ -68,6 +105,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   }
 
   return {
+    shopId,
     analytics,
     recentOrders,
   };
