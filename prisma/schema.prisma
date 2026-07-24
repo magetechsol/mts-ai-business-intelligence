@@ -8,24 +8,31 @@ generator client {
 }
 
 model Session {
-  id           String   @id
-  shop         String
-  state        String
-  scope        String?
-  expires      DateTime?
-  accessToken  String
-  userId       BigInt?
-  accountOwner Boolean  @default(false)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  users        User[]
+  id                String    @id
+  shop              String
+  state             String
+  scope             String?
+  expires           DateTime?
+  accessToken       String
+  isOnline          Boolean   @default(false)
+  userId            BigInt?
+  firstName         String?
+  lastName          String?
+  email             String?
+  accountOwner      Boolean   @default(false)
+  locale            String?
+  collaborator      Boolean   @default(false)
+  emailVerified     Boolean   @default(false)
+  refreshToken      String?
+  refreshTokenExpires DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 }
 
 model User {
   id        BigInt   @id @default(autoincrement())
   email     String
   accounts  Account[]
-  sessions  Session[]
 }
 
 model Account {
