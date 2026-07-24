@@ -14,7 +14,7 @@ function createApp() {
     apiSecretKey: process.env.SHOPIFY_API_SECRET!,
     scopes: (process.env.SCOPES || "").split(","),
     appUrl: process.env.SHOPIFY_APP_URL || "http://localhost:3000",
-    apiVersion: ApiVersion.July25,
+    apiVersion: ApiVersion.July26,
     isEmbeddedApp: true,
     authPathPrefix: "/auth",
     sessionStorage: new PrismaSessionStorage(prisma),

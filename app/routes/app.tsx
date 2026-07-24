@@ -35,9 +35,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     return { apiKey: process.env.SHOPIFY_API_KEY || "", shop: session.shop };
   } catch (error) {
     if (error instanceof Response) {
+      const body = await error.clone().text().catch(() => "(empty)");
+      console.error(`[AUTH] Response ${error.status}: ${body.substring(0, 500)}`);
       throw error;
     }
-    console.error("Layout authenticate.admin error:", error);
+    console.error("[AUTH] Non-response error:", error instanceof Error ? error.message : String(error), error instanceof Error ? error.stack : "");
     throw new Response("Authentication failed", { status: 401 });
   }
 };

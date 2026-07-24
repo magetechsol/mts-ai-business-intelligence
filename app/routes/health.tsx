@@ -16,8 +16,25 @@ export async function loader({ request }: LoaderFunctionArgs) {
     await prisma.$queryRaw`SELECT 1`;
     results.db = "connected";
 
-    const sessionCount = await prisma.session.count();
-    results.sessions = sessionCount;
+    const sessions = await prisma.session.findMany({
+      select: { id: true, shop: true, isOnline: true, expires: true, scope: true },
+      take: 10,
+    });
+    results.sessions = sessions.length;
+    results.sessionDetails = sessions.map((s: any) => ({
+      id: s.id,
+      shop: s.shop,
+      isOnline: s.isOnline,
+      expires: s.expires?.toISOString() || "never",
+      scope: s.scope || "none",
+    }));
+
+    const orderCount = await prisma.syncedOrder.count();
+    results.orders = orderCount;
+    const productCount = await prisma.syncedProduct.count();
+    results.products = productCount;
+    const customerCount = await prisma.syncedCustomer.count();
+    results.customers = customerCount;
   } catch (e: any) {
     results.db = "FAILED: " + (e?.message || String(e));
   }
