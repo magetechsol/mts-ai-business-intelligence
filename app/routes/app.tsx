@@ -33,10 +33,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   try {
     await authenticate.admin(request);
   } catch (e: any) {
-    console.error("authenticate.admin error:", e?.message || e);
     if (e instanceof Response) {
       throw e;
     }
+    console.error("Unexpected auth error:", e?.message || e);
     throw new Response("Authentication failed", { status: 401 });
   }
   return { apiKey: process.env.SHOPIFY_API_KEY || "" };
