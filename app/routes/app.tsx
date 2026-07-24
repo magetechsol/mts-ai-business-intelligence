@@ -30,7 +30,15 @@ import { AppProvider } from "@shopify/shopify-app-react-router/react";
 import { authenticate } from "~/shopify.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  await authenticate.admin(request);
+  try {
+    await authenticate.admin(request);
+  } catch (e: any) {
+    console.error("authenticate.admin error:", e?.message || e);
+    if (e instanceof Response) {
+      throw e;
+    }
+    throw new Response("Authentication failed", { status: 401 });
+  }
   return { apiKey: process.env.SHOPIFY_API_KEY || "" };
 };
 
@@ -198,5 +206,18 @@ export function ErrorBoundary() {
     );
   }
 
-  throw error;
+  if (error instanceof Error) {
+    return (
+      <div style={{ padding: 20 }}>
+        <h1>Error</h1>
+        <p>{error.message}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ padding: 20 }}>
+      <h1>Something went wrong</h1>
+    </div>
+  );
 }
