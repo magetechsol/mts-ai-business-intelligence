@@ -17,8 +17,6 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const { authenticate } = await import("~/shopify.server");
-  const { getFullAnalytics } = await import("~/lib/analytics.server");
-  const { default: prisma } = await import("~/db.server");
 
   const { session } = await authenticate.admin(request);
   const shopId = session.shop;
@@ -27,28 +25,51 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const startDate = new Date();
   startDate.setDate(startDate.getDate() - 30);
 
-  const analytics = await getFullAnalytics(shopId, {
-    startDate,
-    endDate,
-    label: "Last 30 Days",
-  });
+  let analytics;
+  let recentOrders: any[] = [];
 
-  const recentOrders = await prisma.syncedOrder.findMany({
-    where: { shopId, processedAt: { not: null } },
-    orderBy: { processedAt: "desc" },
-    take: 10,
-  });
+  try {
+    const { getFullAnalytics } = await import("~/lib/analytics.server");
+    const { default: prisma } = await import("~/db.server");
 
-  return {
-    analytics,
-    recentOrders: recentOrders.map((o) => ({
+    analytics = await getFullAnalytics(shopId, {
+      startDate,
+      endDate,
+      label: "Last 30 Days",
+    });
+
+    const orders = await prisma.syncedOrder.findMany({
+      where: { shopId, processedAt: { not: null } },
+      orderBy: { processedAt: "desc" },
+      take: 10,
+    });
+
+    recentOrders = orders.map((o) => ({
       id: o.id,
       name: o.name,
       email: o.email,
       totalPrice: o.totalPrice,
       financialStatus: o.financialStatus,
       processedAt: o.processedAt?.toISOString() || o.createdAt.toISOString(),
-    })),
+    }));
+  } catch (e: any) {
+    console.error("Dashboard data error:", e?.message || e);
+    analytics = {
+      revenue: { label: "Total Revenue", value: "$0", change: 0, changeLabel: "No data", trend: "neutral" as const },
+      orders: { label: "Total Orders", value: "0", change: 0, changeLabel: "No data", trend: "neutral" as const },
+      averageOrderValue: { label: "Average Order Value", value: "$0", change: 0, changeLabel: "No data", trend: "neutral" as const },
+      customers: { label: "New Customers", value: "0", change: 0, changeLabel: "No data", trend: "neutral" as const },
+      repeatRate: { label: "Repeat Purchase Rate", value: "0%", change: 0, changeLabel: "No data", trend: "neutral" as const },
+      conversionRate: { label: "Conversion Rate", value: "N/A", change: 0, changeLabel: "No data", trend: "neutral" as const },
+      salesChart: [],
+      topProducts: [],
+      dailyBrief: null,
+    };
+  }
+
+  return {
+    analytics,
+    recentOrders,
   };
 }
 
