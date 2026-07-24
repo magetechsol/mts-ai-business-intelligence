@@ -14,6 +14,5 @@ COPY --from=builder /app/package.json ./
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/public ./public
 RUN npx prisma generate
-RUN npx prisma db push --skip-generate
 EXPOSE 3000
-CMD ["npm", "start"]
+CMD ["sh", "-c", "npx prisma db push --skip-generate --accept-data-loss && npm start"]
