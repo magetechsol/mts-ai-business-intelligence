@@ -41,31 +41,27 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     const { session } = await authenticate.admin(request);
     return { apiKey: process.env.SHOPIFY_API_KEY || "", shop: session.shop, authError: null };
   } catch (error) {
+    if (error instanceof Response) {
+      if (error.status === 200) {
+        throw error;
+      }
+      if (error.status === 302 || error.status === 301) {
+        throw error;
+      }
+    }
+
     diagnostics.push(`Error type: ${error?.constructor?.name || typeof error}`);
     diagnostics.push(`Is Response: ${error instanceof Response}`);
 
     if (error instanceof Response) {
       const body = await error.clone().text().catch(() => "");
       diagnostics.push(`Status: ${error.status} ${error.statusText}`);
-      error.headers.forEach((v: string, k: string) => diagnostics.push(`Header ${k}: ${v}`));
-      diagnostics.push(`Body length: ${body.length}`);
-      if (body) diagnostics.push(`Body preview: ${body.substring(0, 500)}`);
 
-      if (error.status === 200 && body.includes("Shopify.API.init")) {
-        diagnostics.push("===> THIS IS AN APP BRIDGE BOUNCE PAGE (normal for first load)");
-        diagnostics.push("===> App Bridge should handle the session token exchange");
-      } else if (error.status === 302 || error.status === 301) {
-        diagnostics.push(`===> REDIRECT to: ${error.headers.get("location")}`);
-      } else if (error.status === 500) {
+      if (error.status === 500) {
         diagnostics.push("===> 500 from Shopify library. Testing JWT decode...");
 
         const idToken = url.searchParams.get("id_token");
         if (idToken) {
-          try {
-            const payload = await shopify.sessionStorage.loadSession
-              ? null
-              : null;
-          } catch {}
           try {
             const { shopifyApi, ApiVersion } = await import("@shopify/shopify-api");
             const testApi = shopifyApi({
@@ -88,27 +84,22 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
               diagnostics.push(`Current time: ${new Date().toISOString()}`);
             } catch (jwtErr: any) {
               diagnostics.push(`JWT decode FAILED: ${jwtErr.message}`);
-              diagnostics.push("*** API SECRET MISMATCH - SHOPIFY_API_SECRET DOES NOT MATCH SHOPIFY PARTNERS ***");
+              diagnostics.push("*** API SECRET MISMATCH ***");
               diagnostics.push("");
               diagnostics.push("TO FIX:");
-              diagnostics.push("1. Go to Shopify Partners → Your App → API credentials");
+              diagnostics.push("1. Go to Shopify Partners > Your App > API credentials");
               diagnostics.push("2. Click 'Reveal API secret key'");
               diagnostics.push("3. Copy the EXACT secret key");
-              diagnostics.push("4. Go to Render → Environment → Edit SHOPIFY_API_SECRET");
+              diagnostics.push("4. Go to Render > Environment > Edit SHOPIFY_API_SECRET");
               diagnostics.push("5. Paste the exact secret key from step 2");
-              diagnostics.push("6. Save → Render will auto-redeploy");
+              diagnostics.push("6. Save - Render will auto-redeploy");
             }
           } catch (modErr: any) {
             diagnostics.push(`Module error: ${modErr.message}`);
           }
         } else {
-          diagnostics.push("No id_token in URL - cannot test JWT decode");
+          diagnostics.push("No id_token in URL");
         }
-
-        const id_token = url.searchParams.get("id_token");
-        const shop = url.searchParams.get("shop");
-        const host = url.searchParams.get("host");
-        diagnostics.push(`URL params: shop=${shop}, host=${host ? "present" : "MISSING"}, id_token=${id_token ? "present" : "MISSING"}`);
       }
     } else if (error instanceof Error) {
       diagnostics.push(`Message: ${error.message}`);
