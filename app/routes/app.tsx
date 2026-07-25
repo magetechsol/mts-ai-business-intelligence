@@ -30,16 +30,55 @@ import { AppProvider } from "@shopify/shopify-app-react-router/react";
 import { authenticate } from "~/shopify.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
+  const url = new URL(request.url);
+  const startTime = Date.now();
+  const log = (msg: string, extra?: any) => {
+    const elapsed = Date.now() - startTime;
+    const entry = `[APP ${elapsed}ms] ${msg}`;
+    if (extra) console.log(entry, JSON.stringify(extra).substring(0, 200));
+    else console.log(entry);
+  };
+
+  log("=== START ===", {
+    path: url.pathname,
+    hasIdToken: !!url.searchParams.get("id_token"),
+    hasHost: !!url.searchParams.get("host"),
+    hasShop: !!url.searchParams.get("shop"),
+    embedded: url.searchParams.get("embedded"),
+    hasAuthHeader: !!request.headers.get("authorization"),
+  });
+
   try {
+    log("Step 1: Calling authenticate.admin()...");
     const { session } = await authenticate.admin(request);
+    log("Step 2: Auth SUCCESS", {
+      shop: session.shop,
+      isOnline: session.isOnline,
+      scope: session.scope,
+    });
     return { apiKey: process.env.SHOPIFY_API_KEY || "", shop: session.shop };
   } catch (error) {
+    log("Step 2: Auth FAILED");
+
     if (error instanceof Response) {
       const body = await error.clone().text().catch(() => "(empty)");
-      console.error(`[AUTH] Response ${error.status}: ${body.substring(0, 500)}`);
+      const headers: Record<string, string> = {};
+      error.headers.forEach((v, k) => (headers[k] = v));
+      log("Response caught", {
+        status: error.status,
+        statusText: error.statusText,
+        headers,
+        bodyLen: body.length,
+        bodyPreview: body.substring(0, 300),
+      });
       throw error;
     }
-    console.error("[AUTH] Non-response error:", error instanceof Error ? error.message : String(error), error instanceof Error ? error.stack : "");
+
+    log("Non-response error", {
+      name: error instanceof Error ? error.name : typeof error,
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack?.substring(0, 500) : "",
+    });
     throw new Response("Authentication failed", { status: 401 });
   }
 };
@@ -201,25 +240,34 @@ export function ErrorBoundary() {
     }
 
     return (
-      <div style={{ padding: 20 }}>
-        <h1>Error {error.status}</h1>
-        <p>{error.statusText}</p>
+      <div style={{ padding: 20, fontFamily: "monospace" }}>
+        <h1 style={{ color: "#d72c0d" }}>Error {error.status}</h1>
+        <p>{error.statusText || "Unknown"}</p>
+        <pre style={{ whiteSpace: "pre-wrap", fontSize: 12, background: "#f6f6f7", padding: 10 }}>
+          {JSON.stringify(error.data || null)}
+        </pre>
       </div>
     );
   }
 
   if (error instanceof Error) {
     return (
-      <div style={{ padding: 20 }}>
-        <h1>Error</h1>
+      <div style={{ padding: 20, fontFamily: "monospace" }}>
+        <h1 style={{ color: "#d72c0d" }}>Error</h1>
         <p>{error.message}</p>
+        <pre style={{ whiteSpace: "pre-wrap", fontSize: 12, background: "#f6f6f7", padding: 10 }}>
+          {error.stack}
+        </pre>
       </div>
     );
   }
 
   return (
-    <div style={{ padding: 20 }}>
-      <h1>Something went wrong</h1>
+    <div style={{ padding: 20, fontFamily: "monospace" }}>
+      <h1 style={{ color: "#d72c0d" }}>Something went wrong</h1>
+      <pre style={{ whiteSpace: "pre-wrap", fontSize: 12, background: "#f6f6f7", padding: 10 }}>
+        {JSON.stringify(error)}
+      </pre>
     </div>
   );
 }
