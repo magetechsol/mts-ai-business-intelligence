@@ -1,37 +1,25 @@
-import { Box, Layout, Text, Card, Grid, Badge, BlockStack, Banner } from "@shopify/polaris";
-import {
-  PieChart,
-  Pie,
-  Cell,
-  Tooltip,
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-} from "recharts";
-import { useMemo } from "react";
+import { useState } from "react";
 import { useLoaderData } from "react-router";
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
+import {
+  PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid,
+} from "recharts";
 
-const COLORS: Record<string, string> = {
-  in_stock: "#4bb550",
-  low_stock: "#E4910B",
-  out_of_stock: "#D72C0D",
+const STATUS_COLORS: Record<string, string> = {
+  in_stock: "#059669",
+  low_stock: "#d97706",
+  out_of_stock: "#dc2626",
 };
 
 export async function loader({ request }: LoaderFunctionArgs) {
   try {
     const { authenticate } = await import("~/shopify.server");
     const { getInventoryItems } = await import("~/lib/analytics.server");
-
     const { session } = await authenticate.admin(request);
     const shopId = session.shop;
-
     const items = await getInventoryItems(shopId);
-
     const summary = {
       total: items.length,
       inStock: items.filter((i) => i.status === "in_stock").length,
@@ -40,18 +28,15 @@ export async function loader({ request }: LoaderFunctionArgs) {
       totalUnits: items.reduce((sum, i) => sum + i.quantity, 0),
       totalValue: items.reduce((sum, i) => sum + i.price * i.quantity, 0),
     };
-
     const statusData = [
-      { name: "In Stock", value: summary.inStock, color: COLORS.in_stock },
-      { name: "Low Stock", value: summary.lowStock, color: COLORS.low_stock },
-      { name: "Out of Stock", value: summary.outOfStock, color: COLORS.out_of_stock },
+      { name: "In Stock", value: summary.inStock, color: STATUS_COLORS.in_stock },
+      { name: "Low Stock", value: summary.lowStock, color: STATUS_COLORS.low_stock },
+      { name: "Out of Stock", value: summary.outOfStock, color: STATUS_COLORS.out_of_stock },
     ].filter((s) => s.value > 0);
-
     const lowStockItems = items
       .filter((i) => i.status === "low_stock" || i.status === "out_of_stock")
       .sort((a, b) => a.quantity - b.quantity)
       .slice(0, 20);
-
     const productMap: Record<string, { title: string; totalInventory: number; totalValue: number }> = {};
     items.forEach((item) => {
       if (!productMap[item.productId]) productMap[item.productId] = { title: item.productTitle, totalInventory: 0, totalValue: 0 };
@@ -59,7 +44,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
       productMap[item.productId].totalValue += item.price * item.quantity;
     });
     const inventoryByProduct = Object.values(productMap).sort((a, b) => b.totalValue - a.totalValue).slice(0, 10);
-
     return { summary, statusData, lowStockItems, inventoryByProduct, isSample: false };
   } catch {
     const { getSampleInventoryData } = await import("~/lib/sampleData");
@@ -71,122 +55,107 @@ export default function InventoryPage() {
   const { summary, statusData, lowStockItems, inventoryByProduct, isSample } = useLoaderData<typeof loader>();
 
   return (
-    <Box padding="400">
-      <Layout>
-        <Layout.Section>
-          <BlockStack spacing="400">
-            <div>
-              <Text variant="headingXl" as="h1">Inventory Health</Text>
-              <Text variant="bodyMd" as="p" color="subdued">Monitor stock levels and identify inventory issues</Text>
-            </div>
+    <div className="mts-page">
+      <div className="mts-page-header">
+        <h1 className="mts-page-title">Inventory Health</h1>
+        <p className="mts-page-subtitle">Monitor stock levels and identify inventory issues</p>
+        {isSample && (
+          <div style={{ marginTop: 12, padding: "10px 16px", borderRadius: 8, background: "rgba(37, 99, 235, 0.06)", border: "1px solid rgba(37, 99, 235, 0.15)", fontSize: 13, color: "var(--brand-primary-dark)" }}>
+            <strong>Demo Mode</strong> &mdash; Showing sample data.
+          </div>
+        )}
+      </div>
 
-            {isSample && (
-              <Banner status="info" title="Demo Mode">
-                <p>Showing sample data. Connect your Shopify store via Settings to see live analytics.</p>
-              </Banner>
-            )}
+      <div className="mts-kpi-grid" style={{ gridTemplateColumns: "repeat(6, 1fr)" }}>
+        {[
+          { label: "Total SKUs", value: String(summary.total), accent: "" },
+          { label: "Total Units", value: summary.totalUnits.toLocaleString(), accent: "" },
+          { label: "Inventory Value", value: `$${summary.totalValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}`, accent: "" },
+          { label: "In Stock", value: String(summary.inStock), accent: "accent-green" },
+          { label: "Low Stock", value: String(summary.lowStock), accent: "accent-warm" },
+          { label: "Out of Stock", value: String(summary.outOfStock), accent: "accent-warm" },
+        ].map((s) => (
+          <div key={s.label} className={`mts-kpi-card ${s.accent}`}>
+            <div className="mts-kpi-label">{s.label}</div>
+            <div className="mts-kpi-value">{s.value}</div>
+          </div>
+        ))}
+      </div>
 
-            <Grid>
-              {[
-                { label: "Total SKUs", value: String(summary.total) },
-                { label: "Total Units", value: summary.totalUnits.toLocaleString() },
-                { label: "Inventory Value", value: `$${summary.totalValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}` },
-                { label: "In Stock", value: String(summary.inStock), tone: "success" as const },
-                { label: "Low Stock", value: String(summary.lowStock), tone: "warning" as const },
-                { label: "Out of Stock", value: String(summary.outOfStock), tone: "critical" as const },
-              ].map((stat) => (
-                <Grid.Cell key={stat.label} columnSpan={{ xs: 6, sm: 4, md: 4 }}>
-                  <Card><Box padding="400"><BlockStack spacing="200">
-                    <Text variant="bodyMd" as="p" color="subdued">{stat.label}</Text>
-                    <Text variant="heading2xl" as="h2">
-                      {stat.tone ? <Badge tone={stat.tone}>{stat.value}</Badge> : stat.value}
-                    </Text>
-                  </BlockStack></Box></Card>
-                </Grid.Cell>
-              ))}
-            </Grid>
+      <div className="mts-two-col-equal">
+        <div className="mts-chart-card">
+          <h3 className="mts-chart-title">Stock Status Overview</h3>
+          <div className="mts-chart-wrapper" style={{ height: 260 }}>
+            {statusData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={260}>
+                <PieChart>
+                  <Pie data={statusData} cx="50%" cy="50%" outerRadius={90} innerRadius={45} dataKey="value" paddingAngle={3}
+                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
+                    {statusData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
+                  </Pie>
+                  <Tooltip contentStyle={{ borderRadius: 8, border: "1px solid #e2e8f0" }} />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : <div style={{ textAlign: "center", color: "var(--brand-text-muted)", padding: 40 }}>No inventory data available</div>}
+          </div>
+        </div>
+        <div className="mts-chart-card">
+          <h3 className="mts-chart-title">Inventory Value by Product</h3>
+          <div className="mts-chart-wrapper" style={{ height: 260 }}>
+            {inventoryByProduct.length > 0 ? (
+              <ResponsiveContainer width="100%" height={260}>
+                <BarChart data={inventoryByProduct} layout="vertical" margin={{ left: 0, right: 10 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
+                  <XAxis type="number" tick={{ fontSize: 11, fill: "#94a3b8" }} tickFormatter={(v) => `$${v}`} axisLine={false} tickLine={false} />
+                  <YAxis type="category" dataKey="title" tick={{ fontSize: 11, fill: "#475569" }} width={100}
+                    tickFormatter={(v) => v.length > 15 ? v.slice(0, 15) + "..." : v} axisLine={false} tickLine={false} />
+                  <Tooltip contentStyle={{ borderRadius: 8, border: "1px solid #e2e8f0" }} formatter={(value: number) => [`$${value.toFixed(2)}`, "Value"]} />
+                  <Bar dataKey="totalValue" fill="#7c3aed" radius={[0, 6, 6, 0]} barSize={18} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : <div style={{ textAlign: "center", color: "var(--brand-text-muted)", padding: 40 }}>No inventory data available</div>}
+          </div>
+        </div>
+      </div>
 
-            <Grid>
-              <Grid.Cell columnSpan={{ xs: 12, md: 6 }}>
-                <Card><Box padding="400"><BlockStack spacing="300">
-                  <Text variant="headingLg" as="h2">Stock Status Overview</Text>
-                  <div style={{ width: "100%", height: 250 }}>
-                    {statusData.length > 0 ? (
-                      <ResponsiveContainer>
-                        <PieChart>
-                          <Pie data={statusData} cx="50%" cy="50%" outerRadius={80} dataKey="value" label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}>
-                            {statusData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
-                          </Pie>
-                          <Tooltip />
-                        </PieChart>
-                      </ResponsiveContainer>
-                    ) : <div style={{ textAlign: "center", color: "#6D7175", padding: "40px" }}>No inventory data available. Sync your products first.</div>}
-                  </div>
-                </BlockStack></Box></Card>
-              </Grid.Cell>
-
-              <Grid.Cell columnSpan={{ xs: 12, md: 6 }}>
-                <Card><Box padding="400"><BlockStack spacing="300">
-                  <Text variant="headingLg" as="h2">Inventory Value by Product</Text>
-                  <div style={{ width: "100%", height: 250 }}>
-                    {inventoryByProduct.length > 0 ? (
-                      <ResponsiveContainer>
-                        <BarChart data={inventoryByProduct} layout="vertical">
-                          <CartesianGrid strokeDasharray="3 3" stroke="#E1E3E5" />
-                          <XAxis type="number" tick={{ fontSize: 12 }} tickFormatter={(v) => `$${v}`} />
-                          <YAxis type="category" dataKey="title" tick={{ fontSize: 11 }} width={100} tickFormatter={(v) => v.length > 15 ? v.slice(0, 15) + "..." : v} />
-                          <Tooltip formatter={(value: number) => [`$${value.toFixed(2)}`, "Value"]} />
-                          <Bar dataKey="totalValue" fill="#503ceb" radius={[0, 4, 4, 0]} />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    ) : <div style={{ textAlign: "center", color: "#6D7175", padding: "40px" }}>No inventory data available</div>}
-                  </div>
-                </BlockStack></Box></Card>
-              </Grid.Cell>
-            </Grid>
-
-            <Card>
-              <Box padding="400">
-                <BlockStack spacing="300">
-                  <BlockStack distribution="spaceBetween" alignment="center">
-                    <Text variant="headingLg" as="h2">Low Stock & Out of Stock Alerts</Text>
-                    <Badge tone="critical">{lowStockItems.length} items need attention</Badge>
-                  </BlockStack>
-                  <div style={{ overflowX: "auto" }}>
-                    <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                      <thead>
-                        <tr style={{ borderBottom: "1px solid #E1E3E5" }}>
-                          {["Product", "Variant", "SKU", "Status", "Quantity", "Price"].map((h, i) => (
-                            <th key={h} style={{ padding: "8px", textAlign: i >= 4 ? "right" : "left", fontSize: "13px", fontWeight: 600 }}>{h}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {lowStockItems.length === 0 ? (
-                          <tr><td colSpan={6} style={{ padding: "20px", textAlign: "center", color: "#6D7175" }}>No low stock alerts. All products are well-stocked.</td></tr>
-                        ) : lowStockItems.map((item) => (
-                          <tr key={item.id} style={{ borderBottom: "1px solid #F4F6F8" }}>
-                            <td style={{ padding: "8px", fontSize: "13px", fontWeight: 500 }}>{item.productTitle}</td>
-                            <td style={{ padding: "8px", fontSize: "13px" }}>{item.variantTitle}</td>
-                            <td style={{ padding: "8px", fontSize: "13px", color: "#6D7175" }}>{item.sku || "-"}</td>
-                            <td style={{ padding: "8px", textAlign: "center" }}><Badge tone={item.status === "out_of_stock" ? "critical" : "warning"}>{item.status === "out_of_stock" ? "Out of Stock" : "Low Stock"}</Badge></td>
-                            <td style={{ padding: "8px", textAlign: "right", fontSize: "13px" }}>{item.quantity}</td>
-                            <td style={{ padding: "8px", textAlign: "right", fontSize: "13px" }}>${item.price.toFixed(2)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </BlockStack>
-              </Box>
-            </Card>
-          </BlockStack>
-        </Layout.Section>
-      </Layout>
-    </Box>
+      <div className="mts-table-card">
+        <div className="mts-table-header">
+          <h3 className="mts-table-title">Low Stock & Out of Stock Alerts</h3>
+          <span className="mts-badge out-of-stock">{lowStockItems.length} items need attention</span>
+        </div>
+        <table className="mts-table">
+          <thead>
+            <tr>
+              <th>Product</th>
+              <th>Variant</th>
+              <th>SKU</th>
+              <th style={{ textAlign: "center" }}>Status</th>
+              <th style={{ textAlign: "right" }}>Quantity</th>
+              <th style={{ textAlign: "right" }}>Price</th>
+            </tr>
+          </thead>
+          <tbody>
+            {lowStockItems.length === 0 ? (
+              <tr><td colSpan={6} style={{ padding: "40px 24px", textAlign: "center", color: "var(--brand-text-muted)" }}>No low stock alerts. All products are well-stocked.</td></tr>
+            ) : lowStockItems.map((item) => (
+              <tr key={item.id}>
+                <td style={{ fontWeight: 600 }}>{item.productTitle}</td>
+                <td>{item.variantTitle}</td>
+                <td style={{ color: "var(--brand-text-muted)" }}>{item.sku || "-"}</td>
+                <td style={{ textAlign: "center" }}>
+                  <span className={`mts-badge ${item.status === "out_of_stock" ? "out-of-stock" : "low-stock"}`}>
+                    {item.status === "out_of_stock" ? "Out of Stock" : "Low Stock"}
+                  </span>
+                </td>
+                <td style={{ textAlign: "right" }}>{item.quantity}</td>
+                <td style={{ textAlign: "right", fontWeight: 600 }}>${item.price.toFixed(2)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
   );
 }
 
-export const headers: HeadersFunction = (headersArgs) => {
-  return boundary.headers(headersArgs);
-};
+export const headers: HeadersFunction = (headersArgs) => boundary.headers(headersArgs);

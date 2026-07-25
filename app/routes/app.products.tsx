@@ -1,60 +1,30 @@
-import { Box, Layout, Text, Card, Grid, Badge, TextField, BlockStack, Modal, Banner } from "@shopify/polaris";
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-} from "recharts";
 import { useState, useMemo } from "react";
 import { useLoaderData } from "react-router";
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+} from "recharts";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   try {
     const { authenticate } = await import("~/shopify.server");
     const { default: prisma } = await import("~/db.server");
-
     const { session } = await authenticate.admin(request);
     const shopId = session.shop;
-
-    const products = await prisma.syncedProduct.findMany({
-      where: { shopId },
-      include: { variants: true },
-      orderBy: { title: "asc" },
-    });
-
-    const productTypeData = await prisma.syncedProduct.groupBy({
-      by: ["productType"],
-      where: { shopId, status: "ACTIVE" },
-      _count: { id: true },
-    });
-
-    const vendorData = await prisma.syncedProduct.groupBy({
-      by: ["vendor"],
-      where: { shopId, status: "ACTIVE" },
-      _count: { id: true },
-    });
-
-    const totalInventory = products.reduce(
-      (sum, p) => sum + p.variants.reduce((vSum, v) => vSum + v.inventory, 0), 0
-    );
+    const products = await prisma.syncedProduct.findMany({ where: { shopId }, include: { variants: true }, orderBy: { title: "asc" } });
+    const productTypeData = await prisma.syncedProduct.groupBy({ by: ["productType"], where: { shopId, status: "ACTIVE" }, _count: { id: true } });
+    const vendorData = await prisma.syncedProduct.groupBy({ by: ["vendor"], where: { shopId, status: "ACTIVE" }, _count: { id: true } });
+    const totalInventory = products.reduce((sum, p) => sum + p.variants.reduce((vSum, v) => vSum + v.inventory, 0), 0);
     const lowStockProducts = products.filter((p) => p.variants.some((v) => v.inventory > 0 && v.inventory <= 5)).length;
     const outOfStock = products.filter((p) => p.variants.every((v) => v.inventory <= 0)).length;
-
     return {
       products: products.map((p) => ({
         id: p.id, title: p.title, vendor: p.vendor, productType: p.productType,
-        status: p.status, totalVariants: p.totalVariants, imageCount: p.imageCount,
-        createdAt: p.createdAt.toISOString(),
+        status: p.status, totalVariants: p.totalVariants, createdAt: p.createdAt.toISOString(),
         totalInventory: p.variants.reduce((sum, v) => sum + v.inventory, 0),
         totalValue: p.variants.reduce((sum, v) => sum + v.price * v.inventory, 0),
-        variants: p.variants.map((v) => ({
-          id: v.id, title: v.title, sku: v.sku, price: v.price, inventory: v.inventory,
-        })),
+        variants: p.variants.map((v) => ({ id: v.id, title: v.title, sku: v.sku, price: v.price, inventory: v.inventory })),
       })),
       typeData: productTypeData.map((d) => ({ name: d.productType || "Uncategorized", value: d._count.id })),
       vendorData: vendorData.slice(0, 10).map((d) => ({ name: d.vendor || "Unknown", value: d._count.id })),
@@ -69,207 +39,150 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
 export default function ProductsPage() {
   const { products, typeData, vendorData, summary, isSample } = useLoaderData<typeof loader>();
-  const [searchValue, setSearchValue] = useState("");
-  const [selectedProduct, setSelectedProduct] = useState<typeof products[0] | null>(null);
+  const [search, setSearch] = useState("");
+  const [selected, setSelected] = useState<typeof products[0] | null>(null);
 
-  const filteredProducts = useMemo(() => {
-    if (!searchValue) return products;
-    const q = searchValue.toLowerCase();
-    return products.filter((p) => p.title.toLowerCase().includes(q) || p.vendor?.toLowerCase().includes(q) || p.productType?.toLowerCase().includes(q));
-  }, [products, searchValue]);
+  const filtered = useMemo(() => {
+    if (!search) return products;
+    const q = search.toLowerCase();
+    return products.filter((p) => p.title.toLowerCase().includes(q) || p.vendor?.toLowerCase().includes(q));
+  }, [products, search]);
 
   return (
-    <Box padding="400">
-      <Layout>
-        <Layout.Section>
-          <BlockStack spacing="400">
-            <div>
-              <Text variant="headingXl" as="h1">Product Performance</Text>
-              <Text variant="bodyMd" as="p" color="subdued">Analyze your product catalog and inventory levels</Text>
+    <div className="mts-page">
+      <div className="mts-page-header">
+        <h1 className="mts-page-title">Products</h1>
+        <p className="mts-page-subtitle">Analyze your product catalog and inventory levels</p>
+        {isSample && (
+          <div style={{ marginTop: 12, padding: "10px 16px", borderRadius: 8, background: "rgba(37, 99, 235, 0.06)", border: "1px solid rgba(37, 99, 235, 0.15)", fontSize: 13, color: "var(--brand-primary-dark)" }}>
+            <strong>Demo Mode</strong> &mdash; Showing sample data.
+          </div>
+        )}
+      </div>
+
+      <div className="mts-kpi-grid" style={{ gridTemplateColumns: "repeat(5, 1fr)" }}>
+        {[
+          { label: "Total Products", value: String(summary.total), accent: "" },
+          { label: "Active", value: String(summary.active), accent: "accent-green" },
+          { label: "Total Inventory", value: summary.totalInventory.toLocaleString(), accent: "accent-cool" },
+          { label: "Low Stock", value: String(summary.lowStockProducts), accent: "accent-warm" },
+          { label: "Out of Stock", value: String(summary.outOfStock), accent: "" },
+        ].map((s) => (
+          <div key={s.label} className={`mts-kpi-card ${s.accent}`}>
+            <div className="mts-kpi-label">{s.label}</div>
+            <div className="mts-kpi-value">{s.value}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="mts-two-col-equal">
+        <div className="mts-chart-card">
+          <h3 className="mts-chart-title">Products by Category</h3>
+          <div className="mts-chart-wrapper" style={{ height: 260 }}>
+            {typeData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={260}>
+                <BarChart data={typeData.slice(0, 8)} layout="vertical" margin={{ left: 0, right: 10 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
+                  <XAxis type="number" tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
+                  <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: "#475569" }} width={100} axisLine={false} tickLine={false} />
+                  <Tooltip contentStyle={{ borderRadius: 8, border: "1px solid #e2e8f0" }} />
+                  <Bar dataKey="value" fill="#2563eb" radius={[0, 6, 6, 0]} barSize={18} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : <div style={{ textAlign: "center", color: "var(--brand-text-muted)", padding: 40 }}>No categories found</div>}
+          </div>
+        </div>
+        <div className="mts-chart-card">
+          <h3 className="mts-chart-title">Products by Vendor</h3>
+          <div className="mts-chart-wrapper" style={{ height: 260 }}>
+            {vendorData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={260}>
+                <BarChart data={vendorData} margin={{ left: 0, right: 10 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                  <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
+                  <Tooltip contentStyle={{ borderRadius: 8, border: "1px solid #e2e8f0" }} />
+                  <Bar dataKey="value" fill="#7c3aed" radius={[6, 6, 0, 0]} barSize={32} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : <div style={{ textAlign: "center", color: "var(--brand-text-muted)", padding: 40 }}>No vendor data found</div>}
+          </div>
+        </div>
+      </div>
+
+      <div className="mts-table-card">
+        <div className="mts-table-header">
+          <h3 className="mts-table-title">All Products</h3>
+          <input
+            type="text"
+            placeholder="Search products..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            style={{ padding: "8px 14px", borderRadius: 8, border: "1px solid var(--brand-border)", fontSize: 13, width: 220, outline: "none" }}
+          />
+        </div>
+        <table className="mts-table">
+          <thead>
+            <tr>
+              <th>Product</th>
+              <th>Type</th>
+              <th>Vendor</th>
+              <th style={{ textAlign: "center" }}>Status</th>
+              <th style={{ textAlign: "right" }}>Inventory</th>
+              <th style={{ textAlign: "right" }}>Value</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.length === 0 ? (
+              <tr><td colSpan={6} style={{ padding: "40px 24px", textAlign: "center", color: "var(--brand-text-muted)" }}>No products found</td></tr>
+            ) : filtered.map((p) => (
+              <tr key={p.id} onClick={() => setSelected(p)} style={{ cursor: "pointer" }}>
+                <td style={{ fontWeight: 600 }}>{p.title}</td>
+                <td>{p.productType || "-"}</td>
+                <td>{p.vendor || "-"}</td>
+                <td style={{ textAlign: "center" }}><span className={`mts-badge ${p.status.toLowerCase()}`}>{p.status}</span></td>
+                <td style={{ textAlign: "right" }}>{p.totalInventory}</td>
+                <td style={{ textAlign: "right", fontWeight: 600 }}>${p.totalValue.toFixed(2)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {selected && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999, padding: 20 }} onClick={() => setSelected(null)}>
+          <div style={{ background: "#fff", borderRadius: 16, width: "100%", maxWidth: 640, maxHeight: "80vh", overflow: "auto", boxShadow: "0 25px 50px rgba(0,0,0,0.25)" }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ padding: "20px 24px", borderBottom: "1px solid var(--brand-border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>{selected.title}</h3>
+              <button onClick={() => setSelected(null)} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "var(--brand-text-muted)" }}>&times;</button>
             </div>
-
-            {isSample && (
-              <Banner status="info" title="Demo Mode">
-                <p>Showing sample data. Connect your Shopify store via Settings to see live analytics.</p>
-              </Banner>
-            )}
-
-            <Grid>
-              {[
-                { label: "Total Products", value: summary.total, tone: undefined },
-                { label: "Active Products", value: summary.active, tone: undefined },
-                { label: "Total Inventory", value: summary.totalInventory.toLocaleString(), tone: undefined },
-                { label: "Low Stock Items", value: summary.lowStockProducts, tone: summary.lowStockProducts > 0 ? "warning" : "success" },
-                { label: "Out of Stock", value: summary.outOfStock, tone: summary.outOfStock > 0 ? "critical" : "success" },
-              ].map((stat) => (
-                <Grid.Cell key={stat.label} columnSpan={{ xs: 6, sm: 4, md: 4 }}>
-                  <Card><Box padding="400"><BlockStack spacing="200">
-                    <Text variant="bodyMd" as="p" color="subdued">{stat.label}</Text>
-                    <Text variant="heading2xl" as="h2">
-                      {stat.tone ? <Badge tone={stat.tone}>{stat.value}</Badge> : stat.value}
-                    </Text>
-                  </BlockStack></Box></Card>
-                </Grid.Cell>
-              ))}
-            </Grid>
-
-            <Grid>
-              <Grid.Cell columnSpan={{ xs: 12, md: 6 }}>
-                <Card>
-                  <Box padding="400">
-                    <BlockStack spacing="300">
-                      <Text variant="headingLg" as="h2">Products by Category</Text>
-                      <div style={{ width: "100%", height: 250 }}>
-                        {typeData.length > 0 ? (
-                          <ResponsiveContainer>
-                            <BarChart data={typeData.slice(0, 8)} layout="vertical">
-                              <CartesianGrid strokeDasharray="3 3" stroke="#E1E3E5" />
-                              <XAxis type="number" tick={{ fontSize: 12 }} />
-                              <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={100} />
-                              <Tooltip />
-                              <Bar dataKey="value" fill="#503ceb" radius={[0, 4, 4, 0]} />
-                            </BarChart>
-                          </ResponsiveContainer>
-                        ) : <div style={{ textAlign: "center", color: "#6D7175", padding: "20px" }}>No product categories found</div>}
-                      </div>
-                    </BlockStack>
-                  </Box>
-                </Card>
-              </Grid.Cell>
-
-              <Grid.Cell columnSpan={{ xs: 12, md: 6 }}>
-                <Card>
-                  <Box padding="400">
-                    <BlockStack spacing="300">
-                      <Text variant="headingLg" as="h2">Products by Vendor</Text>
-                      <div style={{ width: "100%", height: 250 }}>
-                        {vendorData.length > 0 ? (
-                          <ResponsiveContainer>
-                            <BarChart data={vendorData}>
-                              <CartesianGrid strokeDasharray="3 3" stroke="#E1E3E5" />
-                              <XAxis dataKey="name" tick={{ fontSize: 11 }} angle={-30} textAnchor="end" height={60} />
-                              <YAxis tick={{ fontSize: 12 }} />
-                              <Tooltip />
-                              <Bar dataKey="value" fill="#4bb550" radius={[4, 4, 0, 0]} />
-                            </BarChart>
-                          </ResponsiveContainer>
-                        ) : <div style={{ textAlign: "center", color: "#6D7175", padding: "20px" }}>No vendor data found</div>}
-                      </div>
-                    </BlockStack>
-                  </Box>
-                </Card>
-              </Grid.Cell>
-            </Grid>
-
-            <Card>
-              <Box padding="400">
-                <BlockStack spacing="300">
-                  <BlockStack distribution="spaceBetween" alignment="center">
-                    <Text variant="headingLg" as="h2">All Products</Text>
-                    <TextField value={searchValue} onChange={setSearchValue} placeholder="Search products..." clearButton onClearClick={() => setSearchValue("")} />
-                  </BlockStack>
-                  <div style={{ overflowX: "auto" }}>
-                    <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                      <thead>
-                        <tr style={{ borderBottom: "1px solid #E1E3E5" }}>
-                          {["Product", "Type", "Vendor", "Status", "Inventory", "Value"].map((h) => (
-                            <th key={h} style={{ padding: "8px", textAlign: h === "Inventory" || h === "Value" ? "right" : "left", fontSize: "13px", fontWeight: 600 }}>{h}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {filteredProducts.length === 0 ? (
-                          <tr><td colSpan={6} style={{ padding: "20px", textAlign: "center", color: "#6D7175" }}>No products found. Sync your store data from Settings.</td></tr>
-                        ) : filteredProducts.map((p) => (
-                          <tr key={p.id} onClick={() => setSelectedProduct(p)} style={{ borderBottom: "1px solid #F4F6F8", cursor: "pointer" }}>
-                            <td style={{ padding: "8px", fontSize: "13px", fontWeight: 500 }}>{p.title}</td>
-                            <td style={{ padding: "8px", fontSize: "13px" }}>{p.productType || "-"}</td>
-                            <td style={{ padding: "8px", fontSize: "13px" }}>{p.vendor || "-"}</td>
-                            <td style={{ padding: "8px", textAlign: "center" }}><Badge tone={p.status === "ACTIVE" ? "success" : "info"}>{p.status}</Badge></td>
-                            <td style={{ padding: "8px", textAlign: "right", fontSize: "13px" }}>{p.totalInventory}</td>
-                            <td style={{ padding: "8px", textAlign: "right", fontSize: "13px" }}>${p.totalValue.toFixed(2)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </BlockStack>
-              </Box>
-            </Card>
-          </BlockStack>
-        </Layout.Section>
-      </Layout>
-
-      {selectedProduct && (
-        <Modal
-          open
-          onClose={() => setSelectedProduct(null)}
-          title={selectedProduct.title}
-          secondaryActions={[{ content: "Close", onAction: () => setSelectedProduct(null) }]}
-        >
-          <Modal.Section>
-            <BlockStack spacing="400">
-              <Grid>
-                <Grid.Cell columnSpan={{ xs: 6 }}>
-                  <Text variant="bodyMd" as="p" color="subdued">Type</Text>
-                  <Text variant="bodyLg" as="p">{selectedProduct.productType || "Uncategorized"}</Text>
-                </Grid.Cell>
-                <Grid.Cell columnSpan={{ xs: 6 }}>
-                  <Text variant="bodyMd" as="p" color="subdued">Vendor</Text>
-                  <Text variant="bodyLg" as="p">{selectedProduct.vendor || "Unknown"}</Text>
-                </Grid.Cell>
-                <Grid.Cell columnSpan={{ xs: 6 }}>
-                  <Text variant="bodyMd" as="p" color="subdued">Status</Text>
-                  <Badge tone={selectedProduct.status === "ACTIVE" ? "success" : "info"}>{selectedProduct.status}</Badge>
-                </Grid.Cell>
-                <Grid.Cell columnSpan={{ xs: 6 }}>
-                  <Text variant="bodyMd" as="p" color="subdued">Created</Text>
-                  <Text variant="bodyLg" as="p">{new Date(selectedProduct.createdAt).toLocaleDateString()}</Text>
-                </Grid.Cell>
-                <Grid.Cell columnSpan={{ xs: 6 }}>
-                  <Text variant="bodyMd" as="p" color="subdued">Total Inventory</Text>
-                  <Text variant="headingLg" as="h3">{selectedProduct.totalInventory}</Text>
-                </Grid.Cell>
-                <Grid.Cell columnSpan={{ xs: 6 }}>
-                  <Text variant="bodyMd" as="p" color="subdued">Total Value</Text>
-                  <Text variant="headingLg" as="h3">${selectedProduct.totalValue.toFixed(2)}</Text>
-                </Grid.Cell>
-              </Grid>
-
-              <BlockStack spacing="200">
-                <Text variant="headingLg" as="h2">Variants ({selectedProduct.variants.length})</Text>
-                <div style={{ overflowX: "auto" }}>
-                  <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                    <thead>
-                      <tr style={{ borderBottom: "1px solid #E1E3E5" }}>
-                        {["Variant", "SKU", "Price", "Inventory"].map((h) => (
-                          <th key={h} style={{ padding: "8px", textAlign: h === "Price" || h === "Inventory" ? "right" : "left", fontSize: "13px", fontWeight: 600 }}>{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {selectedProduct.variants.map((v) => (
-                        <tr key={v.id} style={{ borderBottom: "1px solid #F4F6F8" }}>
-                          <td style={{ padding: "8px", fontSize: "13px" }}>{v.title}</td>
-                          <td style={{ padding: "8px", fontSize: "13px", color: "#6D7175" }}>{v.sku || "-"}</td>
-                          <td style={{ padding: "8px", textAlign: "right", fontSize: "13px" }}>${v.price.toFixed(2)}</td>
-                          <td style={{ padding: "8px", textAlign: "right", fontSize: "13px" }}>
-                            <Badge tone={v.inventory <= 0 ? "critical" : v.inventory <= 5 ? "warning" : "success"}>{v.inventory}</Badge>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </BlockStack>
-            </BlockStack>
-          </Modal.Section>
-        </Modal>
+            <div style={{ padding: 24 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 20 }}>
+                <div><div className="mts-kpi-label">Type</div><div style={{ fontWeight: 500 }}>{selected.productType || "Uncategorized"}</div></div>
+                <div><div className="mts-kpi-label">Vendor</div><div style={{ fontWeight: 500 }}>{selected.vendor || "Unknown"}</div></div>
+                <div><div className="mts-kpi-label">Status</div><span className={`mts-badge ${selected.status.toLowerCase()}`}>{selected.status}</span></div>
+                <div><div className="mts-kpi-label">Total Value</div><div style={{ fontWeight: 600, fontSize: 18 }}>${selected.totalValue.toFixed(2)}</div></div>
+              </div>
+              <h4 style={{ margin: "0 0 12px 0", fontSize: 14, fontWeight: 600 }}>Variants ({selected.variants.length})</h4>
+              <table className="mts-table">
+                <thead><tr><th>Variant</th><th>SKU</th><th style={{ textAlign: "right" }}>Price</th><th style={{ textAlign: "right" }}>Stock</th></tr></thead>
+                <tbody>
+                  {selected.variants.map((v) => (
+                    <tr key={v.id}>
+                      <td>{v.title}</td>
+                      <td style={{ color: "var(--brand-text-muted)" }}>{v.sku || "-"}</td>
+                      <td style={{ textAlign: "right" }}>${v.price.toFixed(2)}</td>
+                      <td style={{ textAlign: "right" }}><span className={`mts-badge ${v.inventory <= 0 ? "out-of-stock" : v.inventory <= 5 ? "low-stock" : "active"}`}>{v.inventory}</span></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
       )}
-    </Box>
+    </div>
   );
 }
 
-export const headers: HeadersFunction = (headersArgs) => {
-  return boundary.headers(headersArgs);
-};
+export const headers: HeadersFunction = (headersArgs) => boundary.headers(headersArgs);

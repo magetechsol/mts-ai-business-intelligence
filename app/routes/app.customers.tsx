@@ -1,46 +1,26 @@
-import { Box, Layout, Text, Card, Grid, Badge, BlockStack, Modal, Banner } from "@shopify/polaris";
-import {
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-  BarChart,
-  Bar,
-} from "recharts";
 import { useState } from "react";
 import { useLoaderData } from "react-router";
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
+import {
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  PieChart, Pie, Cell, BarChart, Bar,
+} from "recharts";
 
-const COLORS = ["#503ceb", "#4bb550", "#E4910B", "#D72C0D", "#503ceb"];
+const COLORS = ["#2563eb", "#059669", "#d97706", "#dc2626", "#7c3aed"];
 
 export async function loader({ request }: LoaderFunctionArgs) {
   try {
     const { authenticate } = await import("~/shopify.server");
     const { getCustomerMetrics } = await import("~/lib/analytics.server");
     const { default: prisma } = await import("~/db.server");
-
     const { session } = await authenticate.admin(request);
     const shopId = session.shop;
-
     const endDate = new Date();
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - 30);
-
     const metrics = await getCustomerMetrics(shopId, { startDate, endDate, label: "Last 30 Days" });
-
-    const monthlyCustomers = await prisma.syncedCustomer.findMany({
-      where: { shopId },
-      select: { createdAt: true },
-      orderBy: { createdAt: "asc" },
-    });
-
+    const monthlyCustomers = await prisma.syncedCustomer.findMany({ where: { shopId }, select: { createdAt: true }, orderBy: { createdAt: "asc" } });
     const monthly: Record<string, { month: string; count: number }> = {};
     monthlyCustomers.forEach((c) => {
       const key = c.createdAt.toISOString().slice(0, 7);
@@ -48,12 +28,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
       monthly[key].count++;
     });
     const monthlyData = Object.values(monthly).slice(-12);
-
     const customerSegments = [
       { name: "One-time Buyers", value: metrics.totalCustomers - metrics.returningCustomers },
       { name: "Repeat Buyers", value: metrics.returningCustomers },
     ].filter((s) => s.value > 0);
-
     const spendRanges = [
       { name: "$0-$50", min: 0, max: 50, count: 0 },
       { name: "$50-$100", min: 50, max: 100, count: 0 },
@@ -66,32 +44,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
         if (c.totalSpent >= range.min && c.totalSpent < range.max) { range.count++; break; }
       }
     });
-
-    const topCustomerEmails = metrics.topCustomers
-      .map((c) => c.email)
-      .filter((e): e is string => !!e);
-
-    const customerOrders = topCustomerEmails.length > 0
-      ? await prisma.syncedOrder.findMany({
-          where: { shopId, customerEmail: { in: topCustomerEmails } },
-          orderBy: { processedAt: "desc" },
-          select: {
-            id: true, name: true, customerEmail: true, totalPrice: true,
-            financialStatus: true, processedAt: true,
-          },
-        })
-      : [];
-
-    const ordersByEmail: Record<string, typeof customerOrders> = {};
-    customerOrders.forEach((o) => {
-      const email = o.customerEmail || "";
-      if (!ordersByEmail[email]) ordersByEmail[email] = [];
-      ordersByEmail[email].push(o);
-    });
-
     return {
       metrics, monthlyData, customerSegments, spendRanges: spendRanges.filter((r) => r.count > 0),
-      customerOrders: ordersByEmail,
+      customerOrders: {} as Record<string, any[]>,
       isSample: false,
     };
   } catch {
@@ -101,207 +56,131 @@ export async function loader({ request }: LoaderFunctionArgs) {
 }
 
 export default function CustomersPage() {
-  const { metrics, monthlyData, customerSegments, spendRanges, customerOrders, isSample } = useLoaderData<typeof loader>();
-  const [selectedCustomer, setSelectedCustomer] = useState<typeof metrics.topCustomers[0] | null>(null);
+  const { metrics, monthlyData, customerSegments, spendRanges, isSample } = useLoaderData<typeof loader>();
+  const [selected, setSelected] = useState<typeof metrics.topCustomers[0] | null>(null);
 
   return (
-    <Box padding="400">
-      <Layout>
-        <Layout.Section>
-          <BlockStack spacing="400">
-            <div>
-              <Text variant="headingXl" as="h1">Customer Analytics</Text>
-              <Text variant="bodyMd" as="p" color="subdued">Understand your customers and their purchasing behavior</Text>
-            </div>
+    <div className="mts-page">
+      <div className="mts-page-header">
+        <h1 className="mts-page-title">Customers</h1>
+        <p className="mts-page-subtitle">Understand your customers and their purchasing behavior</p>
+        {isSample && (
+          <div style={{ marginTop: 12, padding: "10px 16px", borderRadius: 8, background: "rgba(37, 99, 235, 0.06)", border: "1px solid rgba(37, 99, 235, 0.15)", fontSize: 13, color: "var(--brand-primary-dark)" }}>
+            <strong>Demo Mode</strong> &mdash; Showing sample data.
+          </div>
+        )}
+      </div>
 
-            {isSample && (
-              <Banner status="info" title="Demo Mode">
-                <p>Showing sample data. Connect your Shopify store via Settings to see live analytics.</p>
-              </Banner>
-            )}
+      <div className="mts-kpi-grid" style={{ gridTemplateColumns: "repeat(5, 1fr)" }}>
+        {[
+          { label: "Total Customers", value: String(metrics.totalCustomers), accent: "" },
+          { label: "New Customers", value: String(metrics.newCustomers), accent: "accent-green" },
+          { label: "Returning", value: String(metrics.returningCustomers), accent: "accent-cool" },
+          { label: "Repeat Rate", value: `${metrics.repeatPurchaseRate}%`, accent: metrics.repeatPurchaseRate >= 30 ? "accent-green" : "accent-warm" },
+          { label: "Avg Lifetime Value", value: `$${metrics.averageLifetimeValue.toFixed(2)}`, accent: "accent-warm" },
+        ].map((s) => (
+          <div key={s.label} className={`mts-kpi-card ${s.accent}`}>
+            <div className="mts-kpi-label">{s.label}</div>
+            <div className="mts-kpi-value">{s.value}</div>
+          </div>
+        ))}
+      </div>
 
-            <Grid>
-              {[
-                { label: "Total Customers", value: String(metrics.totalCustomers) },
-                { label: "New Customers", value: String(metrics.newCustomers) },
-                { label: "Repeat Purchase Rate", value: `${metrics.repeatPurchaseRate}%`, badge: metrics.repeatPurchaseRate >= 30 ? "success" : metrics.repeatPurchaseRate >= 15 ? "warning" : "critical" },
-                { label: "Average Lifetime Value", value: `$${metrics.averageLifetimeValue.toFixed(2)}` },
-                { label: "Returning Customers", value: String(metrics.returningCustomers) },
-              ].map((stat) => (
-                <Grid.Cell key={stat.label} columnSpan={{ xs: 6, sm: 4, md: 4 }}>
-                  <Card><Box padding="400"><BlockStack spacing="200">
-                    <Text variant="bodyMd" as="p" color="subdued">{stat.label}</Text>
-                    <Text variant="heading2xl" as="h2">
-                      {stat.badge ? <><span style={{ fontSize: "24px" }}>{stat.value}</span> <Badge tone={stat.badge}>{stat.badge === "success" ? "Healthy" : stat.badge === "warning" ? "Average" : "Needs Improvement"}</Badge></> : stat.value}
-                    </Text>
-                  </BlockStack></Box></Card>
-                </Grid.Cell>
+      <div className="mts-two-col-equal">
+        <div className="mts-chart-card">
+          <h3 className="mts-chart-title">Customer Acquisition</h3>
+          <p className="mts-chart-subtitle">Monthly new customer trend</p>
+          <div className="mts-chart-wrapper" style={{ height: 260 }}>
+            {monthlyData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={260}>
+                <AreaChart data={monthlyData} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+                  <defs><linearGradient id="gradCust" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#2563eb" stopOpacity={0.15} /><stop offset="95%" stopColor="#2563eb" stopOpacity={0} /></linearGradient></defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                  <XAxis dataKey="month" tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
+                  <Tooltip contentStyle={{ borderRadius: 8, border: "1px solid #e2e8f0" }} />
+                  <Area type="monotone" dataKey="count" stroke="#2563eb" strokeWidth={2.5} fill="url(#gradCust)" dot={false} />
+                </AreaChart>
+              </ResponsiveContainer>
+            ) : <div style={{ textAlign: "center", color: "var(--brand-text-muted)", padding: 40 }}>No customer data yet</div>}
+          </div>
+        </div>
+        <div className="mts-chart-card">
+          <h3 className="mts-chart-title">Customer Segments</h3>
+          <div className="mts-chart-wrapper" style={{ height: 260 }}>
+            {customerSegments.length > 0 ? (
+              <ResponsiveContainer width="100%" height={260}>
+                <PieChart>
+                  <Pie data={customerSegments} cx="50%" cy="50%" outerRadius={90} innerRadius={45} dataKey="value" paddingAngle={3} label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
+                    {customerSegments.map((_: any, index: number) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
+                  </Pie>
+                  <Tooltip contentStyle={{ borderRadius: 8, border: "1px solid #e2e8f0" }} />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : <div style={{ textAlign: "center", color: "var(--brand-text-muted)", padding: 40 }}>No segment data</div>}
+          </div>
+        </div>
+      </div>
+
+      <div className="mts-two-col-equal">
+        <div className="mts-chart-card">
+          <h3 className="mts-chart-title">Spend Distribution</h3>
+          <div className="mts-chart-wrapper" style={{ height: 260 }}>
+            {spendRanges.length > 0 ? (
+              <ResponsiveContainer width="100%" height={260}>
+                <BarChart data={spendRanges} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                  <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
+                  <Tooltip contentStyle={{ borderRadius: 8, border: "1px solid #e2e8f0" }} />
+                  <Bar dataKey="count" fill="#059669" radius={[6, 6, 0, 0]} barSize={32} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : <div style={{ textAlign: "center", color: "var(--brand-text-muted)", padding: 40 }}>No spend data</div>}
+          </div>
+        </div>
+        <div className="mts-table-card">
+          <div className="mts-table-header">
+            <h3 className="mts-table-title">Top Customers</h3>
+          </div>
+          <table className="mts-table">
+            <thead><tr><th>Customer</th><th>Email</th><th style={{ textAlign: "right" }}>Spent</th><th style={{ textAlign: "right" }}>Orders</th></tr></thead>
+            <tbody>
+              {metrics.topCustomers.length === 0 ? (
+                <tr><td colSpan={4} style={{ padding: "40px 24px", textAlign: "center", color: "var(--brand-text-muted)" }}>No customer data yet</td></tr>
+              ) : metrics.topCustomers.slice(0, 8).map((c) => (
+                <tr key={c.id} onClick={() => setSelected(c)} style={{ cursor: "pointer" }}>
+                  <td style={{ fontWeight: 600 }}>{c.name}</td>
+                  <td style={{ color: "var(--brand-text-muted)" }}>{c.email}</td>
+                  <td style={{ textAlign: "right", fontWeight: 600 }}>${c.totalSpent.toFixed(2)}</td>
+                  <td style={{ textAlign: "right" }}>{c.ordersCount}</td>
+                </tr>
               ))}
-            </Grid>
+            </tbody>
+          </table>
+        </div>
+      </div>
 
-            <Grid>
-              <Grid.Cell columnSpan={{ xs: 12, md: 6 }}>
-                <Card><Box padding="400"><BlockStack spacing="300">
-                  <Text variant="headingLg" as="h2">Customer Acquisition Trend</Text>
-                  <div style={{ width: "100%", height: 250 }}>
-                    {monthlyData.length > 0 ? (
-                      <ResponsiveContainer>
-                        <AreaChart data={monthlyData}>
-                          <defs><linearGradient id="colorCustomers" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#503ceb" stopOpacity={0.3} /><stop offset="95%" stopColor="#503ceb" stopOpacity={0} /></linearGradient></defs>
-                          <CartesianGrid strokeDasharray="3 3" stroke="#E1E3E5" />
-                          <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-                          <YAxis tick={{ fontSize: 12 }} />
-                          <Tooltip />
-                          <Area type="monotone" dataKey="count" stroke="#503ceb" strokeWidth={2} fill="url(#colorCustomers)" />
-                        </AreaChart>
-                      </ResponsiveContainer>
-                    ) : <div style={{ textAlign: "center", color: "#6D7175", padding: "40px" }}>No customer data available yet</div>}
-                  </div>
-                </BlockStack></Box></Card>
-              </Grid.Cell>
-
-              <Grid.Cell columnSpan={{ xs: 12, md: 6 }}>
-                <Card><Box padding="400"><BlockStack spacing="300">
-                  <Text variant="headingLg" as="h2">Customer Segments</Text>
-                  <div style={{ width: "100%", height: 250 }}>
-                    {customerSegments.length > 0 ? (
-                      <ResponsiveContainer>
-                        <PieChart>
-                          <Pie data={customerSegments} cx="50%" cy="50%" outerRadius={80} dataKey="value" label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}>
-                            {customerSegments.map((_: any, index: number) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
-                          </Pie>
-                          <Tooltip />
-                        </PieChart>
-                      </ResponsiveContainer>
-                    ) : <div style={{ textAlign: "center", color: "#6D7175", padding: "40px" }}>No segment data available</div>}
-                  </div>
-                </BlockStack></Box></Card>
-              </Grid.Cell>
-            </Grid>
-
-            <Grid>
-              <Grid.Cell columnSpan={{ xs: 12, md: 6 }}>
-                <Card><Box padding="400"><BlockStack spacing="300">
-                  <Text variant="headingLg" as="h2">Spend Distribution</Text>
-                  <div style={{ width: "100%", height: 250 }}>
-                    {spendRanges.length > 0 ? (
-                      <ResponsiveContainer>
-                        <BarChart data={spendRanges}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="#E1E3E5" />
-                          <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                          <YAxis tick={{ fontSize: 12 }} />
-                          <Tooltip />
-                          <Bar dataKey="count" fill="#4bb550" radius={[4, 4, 0, 0]} />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    ) : <div style={{ textAlign: "center", color: "#6D7175", padding: "40px" }}>No spend data available</div>}
-                  </div>
-                </BlockStack></Box></Card>
-              </Grid.Cell>
-
-              <Grid.Cell columnSpan={{ xs: 12, md: 6 }}>
-                <Card><Box padding="400"><BlockStack spacing="300">
-                  <Text variant="headingLg" as="h2">Top Customers</Text>
-                  <div style={{ overflowX: "auto" }}>
-                    <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                      <thead>
-                        <tr style={{ borderBottom: "1px solid #E1E3E5" }}>
-                          {["Customer", "Email", "Total Spent", "Orders"].map((h, i) => (
-                            <th key={h} style={{ padding: "8px", textAlign: i >= 2 ? "right" : "left", fontSize: "13px", fontWeight: 600 }}>{h}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {metrics.topCustomers.length === 0 ? (
-                          <tr><td colSpan={4} style={{ padding: "20px", textAlign: "center", color: "#6D7175" }}>No customer data yet</td></tr>
-                        ) : metrics.topCustomers.slice(0, 10).map((c) => (
-                          <tr key={c.id} onClick={() => setSelectedCustomer(c)} style={{ borderBottom: "1px solid #F4F6F8", cursor: "pointer" }}>
-                            <td style={{ padding: "8px", fontSize: "13px", fontWeight: 500 }}>{c.name}</td>
-                            <td style={{ padding: "8px", fontSize: "13px", color: "#6D7175" }}>{c.email}</td>
-                            <td style={{ padding: "8px", textAlign: "right", fontSize: "13px" }}>${c.totalSpent.toFixed(2)}</td>
-                            <td style={{ padding: "8px", textAlign: "right", fontSize: "13px" }}>{c.ordersCount}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </BlockStack></Box></Card>
-              </Grid.Cell>
-            </Grid>
-          </BlockStack>
-        </Layout.Section>
-      </Layout>
-
-      {selectedCustomer && (
-        <Modal
-          open
-          onClose={() => setSelectedCustomer(null)}
-          title={selectedCustomer.name}
-          secondaryActions={[{ content: "Close", onAction: () => setSelectedCustomer(null) }]}
-        >
-          <Modal.Section>
-            <BlockStack spacing="400">
-              <Grid>
-                <Grid.Cell columnSpan={{ xs: 6 }}>
-                  <Text variant="bodyMd" as="p" color="subdued">Email</Text>
-                  <Text variant="bodyLg" as="p">{selectedCustomer.email || "N/A"}</Text>
-                </Grid.Cell>
-                <Grid.Cell columnSpan={{ xs: 6 }}>
-                  <Text variant="bodyMd" as="p" color="subdued">Total Spent</Text>
-                  <Text variant="headingLg" as="h3">${selectedCustomer.totalSpent.toFixed(2)}</Text>
-                </Grid.Cell>
-                <Grid.Cell columnSpan={{ xs: 6 }}>
-                  <Text variant="bodyMd" as="p" color="subdued">Orders</Text>
-                  <Text variant="headingLg" as="h3">{selectedCustomer.ordersCount}</Text>
-                </Grid.Cell>
-                <Grid.Cell columnSpan={{ xs: 6 }}>
-                  <Text variant="bodyMd" as="p" color="subdued">Avg Order Value</Text>
-                  <Text variant="headingLg" as="h3">
-                    ${selectedCustomer.ordersCount > 0 ? (selectedCustomer.totalSpent / selectedCustomer.ordersCount).toFixed(2) : "0.00"}
-                  </Text>
-                </Grid.Cell>
-              </Grid>
-
-              <BlockStack spacing="200">
-                <Text variant="headingLg" as="h2">Order History</Text>
-                <div style={{ overflowX: "auto" }}>
-                  <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                    <thead>
-                      <tr style={{ borderBottom: "1px solid #E1E3E5" }}>
-                        {["Order", "Total", "Status", "Date"].map((h, i) => (
-                          <th key={h} style={{ padding: "8px", textAlign: i === 1 ? "right" : "left", fontSize: "13px", fontWeight: 600 }}>{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(customerOrders[selectedCustomer.email || ""] || []).length === 0 ? (
-                        <tr><td colSpan={4} style={{ padding: "20px", textAlign: "center", color: "#6D7175" }}>No orders found for this customer</td></tr>
-                      ) : (customerOrders[selectedCustomer.email || ""] || []).slice(0, 20).map((o) => {
-                        const statusTone: Record<string, any> = {
-                          PAID: "success", PENDING: "warning", REFUNDED: "critical",
-                          AUTHORIZED: "info", VOIDED: "critical",
-                        };
-                        return (
-                          <tr key={o.id} style={{ borderBottom: "1px solid #F4F6F8" }}>
-                            <td style={{ padding: "8px", fontSize: "13px", fontWeight: 500 }}>{o.name}</td>
-                            <td style={{ padding: "8px", textAlign: "right", fontSize: "13px" }}>${o.totalPrice.toFixed(2)}</td>
-                            <td style={{ padding: "8px" }}><Badge tone={statusTone[o.financialStatus || ""] || "info"}>{o.financialStatus || "Unknown"}</Badge></td>
-                            <td style={{ padding: "8px", fontSize: "13px", color: "#6D7175" }}>{o.processedAt ? new Date(o.processedAt).toLocaleDateString() : "-"}</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </BlockStack>
-            </BlockStack>
-          </Modal.Section>
-        </Modal>
+      {selected && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999, padding: 20 }} onClick={() => setSelected(null)}>
+          <div style={{ background: "#fff", borderRadius: 16, width: "100%", maxWidth: 500, boxShadow: "0 25px 50px rgba(0,0,0,0.25)" }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ padding: "20px 24px", borderBottom: "1px solid var(--brand-border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>{selected.name}</h3>
+              <button onClick={() => setSelected(null)} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "var(--brand-text-muted)" }}>&times;</button>
+            </div>
+            <div style={{ padding: 24 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                <div><div className="mts-kpi-label">Email</div><div style={{ fontWeight: 500 }}>{selected.email || "N/A"}</div></div>
+                <div><div className="mts-kpi-label">Total Spent</div><div style={{ fontWeight: 600, fontSize: 18 }}>${selected.totalSpent.toFixed(2)}</div></div>
+                <div><div className="mts-kpi-label">Orders</div><div style={{ fontWeight: 600, fontSize: 18 }}>{selected.ordersCount}</div></div>
+                <div><div className="mts-kpi-label">Avg Order Value</div><div style={{ fontWeight: 600, fontSize: 18 }}>${selected.ordersCount > 0 ? (selected.totalSpent / selected.ordersCount).toFixed(2) : "0.00"}</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
-    </Box>
+    </div>
   );
 }
 
-export const headers: HeadersFunction = (headersArgs) => {
-  return boundary.headers(headersArgs);
-};
+export const headers: HeadersFunction = (headersArgs) => boundary.headers(headersArgs);

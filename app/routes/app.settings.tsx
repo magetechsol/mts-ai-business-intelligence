@@ -1,5 +1,3 @@
-import { Box, Layout, Text, Card, Banner, Button, TextField, BlockStack } from "@shopify/polaris";
-
 import { useState } from "react";
 import { useLoaderData, useFetcher } from "react-router";
 import type { HeadersFunction, LoaderFunctionArgs, ActionFunctionArgs } from "react-router";
@@ -9,29 +7,18 @@ export async function loader({ request }: LoaderFunctionArgs) {
   try {
     const { authenticate } = await import("~/shopify.server");
     const { default: prisma } = await import("~/db.server");
-
     const { session } = await authenticate.admin(request);
     const shopId = session.shop;
-
     const settings = await prisma.appSettings.findUnique({ where: { shopId } });
-
     return {
-      shopId,
-      shopName: session.shop,
+      shopId, shopName: session.shop,
       openaiKey: settings?.openaiKey || "",
       syncEnabled: settings?.syncEnabled ?? true,
       lastSyncAt: settings?.lastSyncAt?.toISOString() || null,
       isSample: false,
     };
   } catch {
-    return {
-      shopId: "demo",
-      shopName: "demo.myshopify.com",
-      openaiKey: "",
-      syncEnabled: true,
-      lastSyncAt: null,
-      isSample: true,
-    };
+    return { shopId: "demo", shopName: "demo.myshopify.com", openaiKey: "", syncEnabled: true, lastSyncAt: null, isSample: true };
   }
 }
 
@@ -39,12 +26,10 @@ export async function action({ request }: ActionFunctionArgs) {
   try {
     const { authenticate } = await import("~/shopify.server");
     const { default: prisma } = await import("~/db.server");
-
     const { session } = await authenticate.admin(request);
     const shopId = session.shop;
     const formData = await request.formData();
     const intent = formData.get("intent") as string;
-
     if (intent === "save") {
       const openaiKey = formData.get("openaiKey") as string;
       await prisma.appSettings.upsert({
@@ -54,13 +39,11 @@ export async function action({ request }: ActionFunctionArgs) {
       });
       return { success: true, message: "Settings saved" };
     }
-
     if (intent === "sync") {
       const { syncAllData } = await import("~/lib/sync.server");
       const result = await syncAllData(request, shopId);
       return { success: true, message: `Synced ${result.orders} orders, ${result.products} products, ${result.customers} customers` };
     }
-
     return { error: "Unknown action" };
   } catch (e: any) {
     console.error("Settings action error:", e?.message || e);
@@ -72,92 +55,100 @@ export default function SettingsPage() {
   const { shopName, openaiKey, lastSyncAt, isSample } = useLoaderData<typeof loader>();
   const fetcher = useFetcher();
   const [key, setKey] = useState(openaiKey);
-
   const isSubmitting = fetcher.state === "submitting";
   const result = fetcher.data;
 
   return (
-    <Box padding="400">
-      <Layout>
-        <Layout.Section>
-          <BlockStack spacing="400">
+    <div className="mts-page">
+      <div className="mts-page-header">
+        <h1 className="mts-page-title">Settings</h1>
+        <p className="mts-page-subtitle">Configure your MTS AI Business Intelligence app</p>
+        {isSample && (
+          <div style={{ marginTop: 12, padding: "10px 16px", borderRadius: 8, background: "rgba(37, 99, 235, 0.06)", border: "1px solid rgba(37, 99, 235, 0.15)", fontSize: 13, color: "var(--brand-primary-dark)" }}>
+            <strong>Demo Mode</strong> &mdash; Re-authenticate your app in Shopify admin to connect your store.
+          </div>
+        )}
+      </div>
+
+      <div className="mts-two-col-equal">
+        <div className="mts-chart-card">
+          <h3 className="mts-chart-title">Store Information</h3>
+          <div style={{ marginTop: 16, display: "grid", gap: 16 }}>
             <div>
-              <Text variant="headingXl" as="h1">Settings</Text>
-              <Text variant="bodyMd" as="p" color="subdued">Configure your MTS AI Business Intelligence app</Text>
+              <div className="mts-kpi-label">Store Domain</div>
+              <div style={{ fontSize: 15, fontWeight: 600 }}>{shopName}</div>
             </div>
+            <div>
+              <div className="mts-kpi-label">Last Sync</div>
+              <div style={{ fontSize: 15, fontWeight: 600 }}>{lastSyncAt ? new Date(lastSyncAt).toLocaleString() : "Never"}</div>
+            </div>
+            <div>
+              <div className="mts-kpi-label">App Version</div>
+              <div style={{ fontSize: 15, fontWeight: 600 }}>1.0.0</div>
+            </div>
+          </div>
+        </div>
 
-            {isSample && (
-              <Banner status="info" title="Demo Mode">
-                <p>Showing sample data. Re-authenticate your app in Shopify admin to connect your store.</p>
-              </Banner>
-            )}
+        <div className="mts-chart-card">
+          <h3 className="mts-chart-title">About MTS AI Business Intelligence</h3>
+          <p style={{ fontSize: 14, color: "var(--brand-text-muted)", lineHeight: 1.6, marginTop: 12 }}>
+            MTS AI Business Intelligence provides intelligent analytics, AI-powered insights, and actionable recommendations to help you grow your Shopify store.
+          </p>
+          <div style={{ marginTop: 16, display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {["Sales Analytics", "Product Performance", "Customer Insights", "Inventory Health", "Revenue Forecasting", "AI Assistant"].map((f) => (
+              <span key={f} className="mts-badge active">{f}</span>
+            ))}
+          </div>
+        </div>
+      </div>
 
-            <Card>
-              <Box padding="400">
-                <BlockStack spacing="300">
-                  <Text variant="headingLg" as="h2">Store Information</Text>
-                  <BlockStack spacing="200">
-                    <Text variant="bodyMd" as="p"><strong>Store:</strong> {shopName}</Text>
-                    <Text variant="bodyMd" as="p"><strong>Last Sync:</strong> {lastSyncAt ? new Date(lastSyncAt).toLocaleString() : "Never"}</Text>
-                  </BlockStack>
-                </BlockStack>
-              </Box>
-            </Card>
+      <div className="mts-chart-card">
+        <h3 className="mts-chart-title">Data Sync</h3>
+        <p className="mts-chart-subtitle">Sync your store data to enable analytics. This will fetch orders, products, and customers from the last 30 days.</p>
+        <fetcher.Form method="POST" style={{ marginTop: 16 }}>
+          <input type="hidden" name="intent" value="sync" />
+          <button type="submit" disabled={isSubmitting}
+            style={{ padding: "10px 24px", borderRadius: "var(--brand-radius-sm)", background: "var(--brand-gradient)", color: "#fff", border: "none", fontSize: 14, fontWeight: 600, cursor: isSubmitting ? "not-allowed" : "pointer", opacity: isSubmitting ? 0.6 : 1 }}>
+            {isSubmitting ? "Syncing..." : "Sync Now"}
+          </button>
+        </fetcher.Form>
+        {result?.success && result.message?.includes("Synced") && (
+          <div style={{ marginTop: 16, padding: "10px 16px", borderRadius: 8, background: "rgba(5, 150, 105, 0.06)", border: "1px solid rgba(5, 150, 105, 0.15)", fontSize: 13, color: "var(--brand-success)" }}>
+            <strong>Sync Complete</strong> &mdash; {result.message}
+          </div>
+        )}
+        {result?.error && (
+          <div style={{ marginTop: 16, padding: "10px 16px", borderRadius: 8, background: "rgba(220, 38, 38, 0.06)", border: "1px solid rgba(220, 38, 38, 0.15)", fontSize: 13, color: "var(--brand-danger)" }}>
+            <strong>Error</strong> &mdash; {result.error}
+          </div>
+        )}
+      </div>
 
-            <Card>
-              <Box padding="400">
-                <BlockStack spacing="300">
-                  <Text variant="headingLg" as="h2">Data Sync</Text>
-                  <Text variant="bodyMd" as="p" color="subdued">Sync your store data to enable analytics. This will fetch orders, products, and customers from the last 30 days.</Text>
-                  <fetcher.Form method="POST">
-                    <input type="hidden" name="intent" value="sync" />
-                    <Button primary submit loading={isSubmitting} disabled={isSubmitting}>{isSubmitting ? "Syncing..." : "Sync Now"}</Button>
-                  </fetcher.Form>
-                  {result?.success && result.message?.includes("Synced") && (
-                    <Banner status="success" title="Sync Complete"><p>{result.message}</p></Banner>
-                  )}
-                </BlockStack>
-              </Box>
-            </Card>
-
-            <Card>
-              <Box padding="400">
-                <BlockStack spacing="300">
-                  <Text variant="headingLg" as="h2">OpenAI API Configuration</Text>
-                  <Text variant="bodyMd" as="p" color="subdued">Enter your OpenAI API key to enable AI-powered insights. The app uses rule-based analytics as a fallback if no key is provided.</Text>
-                  <fetcher.Form method="POST">
-                    <input type="hidden" name="intent" value="save" />
-                    <BlockStack spacing="300">
-                      <TextField label="OpenAI API Key" name="openaiKey" value={key} onChange={setKey} placeholder="sk-..." type="password" helpText="Your API key is stored securely and only used for generating insights." />
-                      <div><Button primary submit loading={isSubmitting}>Save Settings</Button></div>
-                    </BlockStack>
-                  </fetcher.Form>
-                  {result?.success && result.message === "Settings saved" && (
-                    <Banner status="success" title="Settings Saved"><p>Your settings have been updated successfully.</p></Banner>
-                  )}
-                </BlockStack>
-              </Box>
-            </Card>
-
-            <Card>
-              <Box padding="400">
-                <BlockStack spacing="300">
-                  <Text variant="headingLg" as="h2">About MTS AI Business Intelligence</Text>
-                  <BlockStack spacing="200">
-                    <Text variant="bodyMd" as="p"><strong>Version:</strong> 1.0.0</Text>
-                    <Text variant="bodyMd" as="p">MTS AI Business Intelligence provides intelligent analytics, AI-powered insights, and actionable recommendations to help you grow your Shopify store.</Text>
-                    <Text variant="bodyMd" as="p" color="subdued">Features: Sales Analytics, Product Performance, Customer Insights, Inventory Health, Revenue Forecasting, Natural Language AI Assistant.</Text>
-                  </BlockStack>
-                </BlockStack>
-              </Box>
-            </Card>
-          </BlockStack>
-        </Layout.Section>
-      </Layout>
-    </Box>
+      <div className="mts-chart-card">
+        <h3 className="mts-chart-title">OpenAI API Configuration</h3>
+        <p className="mts-chart-subtitle">Enter your OpenAI API key to enable AI-powered insights. The app uses rule-based analytics as a fallback if no key is provided.</p>
+        <fetcher.Form method="POST" style={{ marginTop: 16 }}>
+          <input type="hidden" name="intent" value="save" />
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ display: "block", fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--brand-text-muted)", marginBottom: 8 }}>OpenAI API Key</label>
+            <input type="password" name="openaiKey" value={key} onChange={(e) => setKey(e.target.value)}
+              placeholder="sk-..."
+              style={{ width: "100%", padding: "10px 14px", borderRadius: "var(--brand-radius-sm)", border: "1px solid var(--brand-border)", fontSize: 14, outline: "none", boxSizing: "border-box" }} />
+            <p style={{ fontSize: 12, color: "var(--brand-text-muted)", marginTop: 6 }}>Your API key is stored securely and only used for generating insights.</p>
+          </div>
+          <button type="submit" disabled={isSubmitting}
+            style={{ padding: "10px 24px", borderRadius: "var(--brand-radius-sm)", background: "var(--brand-gradient)", color: "#fff", border: "none", fontSize: 14, fontWeight: 600, cursor: isSubmitting ? "not-allowed" : "pointer", opacity: isSubmitting ? 0.6 : 1 }}>
+            Save Settings
+          </button>
+        </fetcher.Form>
+        {result?.success && result.message === "Settings saved" && (
+          <div style={{ marginTop: 16, padding: "10px 16px", borderRadius: 8, background: "rgba(5, 150, 105, 0.06)", border: "1px solid rgba(5, 150, 105, 0.15)", fontSize: 13, color: "var(--brand-success)" }}>
+            <strong>Settings Saved</strong> &mdash; Your settings have been updated successfully.
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
-export const headers: HeadersFunction = (headersArgs) => {
-  return boundary.headers(headersArgs);
-};
+export const headers: HeadersFunction = (headersArgs) => boundary.headers(headersArgs);

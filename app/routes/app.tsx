@@ -8,8 +8,6 @@ import {
   Popover,
   ActionList,
   Avatar,
-  Box,
-  Text,
 } from "@shopify/polaris";
 import {
   HomeIcon,

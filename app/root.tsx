@@ -6,6 +6,7 @@ import {
   ScrollRestoration,
 } from "react-router";
 import "@shopify/polaris/build/esm/styles.css";
+import "./app.css";
 
 export default function App() {
   return (
