@@ -3,11 +3,9 @@ import {
   TopBar,
   Frame,
   Toast,
-  Button,
   AppProvider as PolarisAppProvider,
   Popover,
   ActionList,
-  Avatar,
 } from "@shopify/polaris";
 import {
   HomeIcon,
@@ -136,6 +134,53 @@ export default function AppLayout() {
     item.href === "/app" ? currentPath === "/app" : currentPath.startsWith(item.href)
   );
 
+  const userMenuActivator = (
+    <button
+      type="button"
+      onClick={toggleUserMenu}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+        padding: "6px 12px",
+        borderRadius: 8,
+        border: "1px solid rgba(255,255,255,0.15)",
+        background: userMenuActive ? "rgba(255,255,255,0.14)" : "rgba(255,255,255,0.08)",
+        color: "#fff",
+        cursor: "pointer",
+        transition: "background 0.15s ease",
+        fontSize: 13,
+        fontWeight: 500,
+        lineHeight: 1,
+      }}
+    >
+      <span
+        style={{
+          width: 28,
+          height: 28,
+          borderRadius: "50%",
+          background: "linear-gradient(135deg, #3b82f6, #7c3aed)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontSize: 10,
+          fontWeight: 700,
+          color: "#fff",
+          letterSpacing: "0.03em",
+          flexShrink: 0,
+        }}
+      >
+        MTS
+      </span>
+      <span style={{ maxWidth: 100, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        MTS AI BI
+      </span>
+      <svg width="12" height="12" viewBox="0 0 20 20" fill="none" style={{ opacity: 0.7, flexShrink: 0 }}>
+        <path fillRule="evenodd" d="M5.72 8.47a.75.75 0 0 1 1.06 0l3.47 3.47 3.47-3.47a.75.75 0 1 1 1.06 1.06l-4 4a.75.75 0 0 1-1.06 0l-4-4a.75.75 0 0 1 0-1.06Z" fill="currentColor" />
+      </svg>
+    </button>
+  );
+
   const topBarMarkup = (
     <TopBar
       showNavigationToggle
@@ -144,16 +189,9 @@ export default function AppLayout() {
       secondaryMenu={
         <Popover
           active={userMenuActive}
-          activator={
-            <Button
-              disclosure
-              onClick={toggleUserMenu}
-              icon={<Avatar customer size="small" />}
-            >
-              MTS AI BI
-            </Button>
-          }
+          activator={userMenuActivator}
           onClose={toggleUserMenu}
+          preferredAlignment="right"
         >
           <ActionList
             items={[
