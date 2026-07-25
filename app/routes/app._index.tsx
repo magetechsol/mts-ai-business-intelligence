@@ -8,6 +8,9 @@ import {
 } from "recharts";
 
 export async function loader({ request }: LoaderFunctionArgs) {
+  const ua = request.headers.get("User-Agent") || "none";
+  const url = request.url;
+  console.log(`[AUTH DEBUG] UA: ${ua.substring(0, 200)} | URL: ${url.substring(0, 200)}`);
   try {
     const { authenticate } = await import("~/shopify.server");
     const { default: prisma } = await import("~/db.server");
