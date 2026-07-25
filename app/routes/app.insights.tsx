@@ -114,10 +114,10 @@ export default function InsightsPage() {
     setQuestion("");
   };
 
-  const forecastChart = [
+  const forecastChart = analytics ? [
     ...analytics.salesChart.slice(-14).map((d) => ({ date: d.date, actual: d.revenue, forecast: null as number | null, lower: null as number | null, upper: null as number | null })),
     ...forecast.map((f) => ({ date: f.date, actual: null as number | null, forecast: f.forecast, lower: f.lowerBound, upper: f.upperBound })),
-  ];
+  ] : [];
 
   return (
     <div className="mts-page">
@@ -147,6 +147,7 @@ export default function InsightsPage() {
         )}
       </div>
 
+      {isPro ? (<>
       {dailyBrief && (
         <div className="mts-chart-card" style={{ borderLeft: "4px solid var(--brand-primary)" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
@@ -184,7 +185,7 @@ export default function InsightsPage() {
                 ]}
               />
               <ReferenceLine
-                x={analytics.salesChart.length > 0 ? analytics.salesChart[analytics.salesChart.length - 1]?.date : ""}
+                x={analytics && analytics.salesChart.length > 0 ? analytics.salesChart[analytics.salesChart.length - 1]?.date : ""}
                 stroke="#94a3b8" strokeDasharray="3 3" label={{ value: "Today", position: "top", fontSize: 11, fill: "#94a3b8" }}
               />
               <Area type="monotone" dataKey="actual" stroke="#2563eb" strokeWidth={2.5} fill="url(#colorActual)" />
@@ -258,6 +259,14 @@ export default function InsightsPage() {
           </button>
         </div>
       </div>
+      </>) : (
+        <div className="mts-chart-card" style={{ textAlign: "center", padding: 60 }}>
+          <div style={{ fontSize: 48, marginBottom: 16 }}>&#128269;</div>
+          <h3 style={{ fontSize: 20, fontWeight: 600, color: "var(--brand-text)", margin: "0 0 8px" }}>Pro Feature</h3>
+          <p style={{ fontSize: 14, color: "var(--brand-text-muted)", marginBottom: 20 }}>Upgrade to Pro to access AI-powered insights, revenue forecasting, and business intelligence.</p>
+          <a href="/app/pricing" target="_top" style={{ display: "inline-block", padding: "12px 28px", borderRadius: 8, background: "var(--brand-gradient)", color: "#fff", fontSize: 14, fontWeight: 600, textDecoration: "none" }}>View Plans</a>
+        </div>
+      )}
     </div>
   );
 }

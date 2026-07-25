@@ -121,10 +121,11 @@ export default function AppLayout() {
     <Navigation location={currentPath}>
       <Navigation.Section
         items={navItems.map((item) => ({
-          label: item.label,
+          label: item.pro ? `${item.label}` : item.label,
           url: item.href,
           icon: item.icon,
           selected: item.href === "/app" ? currentPath === "/app" : currentPath.startsWith(item.href),
+          badge: item.pro ? "PRO" : undefined,
         }))}
       />
     </Navigation>
@@ -195,6 +196,11 @@ export default function AppLayout() {
         >
           <ActionList
             items={[
+              {
+                content: "Upgrade to Pro",
+                icon: SettingsIcon,
+                onAction: () => { window.location.href = "/app/pricing"; },
+              },
               {
                 content: "Settings",
                 icon: SettingsIcon,
