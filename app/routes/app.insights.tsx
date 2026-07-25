@@ -27,25 +27,6 @@ const SUGGESTED_QUESTIONS = [
 ];
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  const emptyAnalytics = {
-    revenue: { label: "Total Revenue", value: "$0", change: 0, changeLabel: "No data", trend: "neutral" as const },
-    orders: { label: "Total Orders", value: "0", change: 0, changeLabel: "No data", trend: "neutral" as const },
-    averageOrderValue: { label: "Average Order Value", value: "$0", change: 0, changeLabel: "No data", trend: "neutral" as const },
-    customers: { label: "New Customers", value: "0", change: 0, changeLabel: "No data", trend: "neutral" as const },
-    repeatRate: { label: "Repeat Purchase Rate", value: "0%", change: 0, changeLabel: "No data", trend: "neutral" as const },
-    conversionRate: { label: "Conversion Rate", value: "N/A", change: 0, changeLabel: "No data", trend: "neutral" as const },
-    salesChart: [] as any[],
-    topProducts: [] as any[],
-    dailyBrief: null as any,
-  };
-  const empty = {
-    analytics: emptyAnalytics,
-    forecast: [] as any[],
-    insights: [] as any[],
-    dailyBrief: null as string | null,
-    hasOpenAiKey: false,
-  };
-
   try {
     const { authenticate } = await import("~/shopify.server");
     const { getFullAnalytics } = await import("~/lib/analytics.server");
@@ -59,12 +40,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - 30);
 
-    const analytics = await getFullAnalytics(shopId, {
-      startDate,
-      endDate,
-      label: "Last 30 Days",
-    });
-
+    const analytics = await getFullAnalytics(shopId, { startDate, endDate, label: "Last 30 Days" });
     const forecast = forecastRevenue(analytics.salesChart, 30);
 
     const insights = await prisma.aiInsight.findMany({
@@ -79,20 +55,23 @@ export async function loader({ request }: LoaderFunctionArgs) {
     });
 
     return {
-      analytics,
-      forecast,
+      analytics, forecast,
       insights: insights.map((i) => ({
-        id: i.id,
-        question: i.question,
-        answer: i.answer,
-        createdAt: i.createdAt.toISOString(),
+        id: i.id, question: i.question, answer: i.answer, createdAt: i.createdAt.toISOString(),
       })),
       dailyBrief: brief?.answer || null,
       hasOpenAiKey: !!(typeof process !== "undefined" && process.env?.OPENAI_API_KEY && process.env.OPENAI_API_KEY !== "your_openai_api_key_here"),
+      isSample: false,
     };
-  } catch (e: any) {
-    console.error("Insights auth error:", e?.message || e);
-    return empty;
+  } catch {
+    const { getSampleAnalytics } = await import("~/lib/sampleData");
+    const sampleAnalytics = getSampleAnalytics();
+    const { forecastRevenue } = await import("~/lib/forecast.server");
+    const forecast = forecastRevenue(sampleAnalytics.salesChart, 30);
+    return {
+      analytics: sampleAnalytics, forecast, insights: [], dailyBrief: null,
+      hasOpenAiKey: false, isSample: true,
+    };
   }
 }
 
@@ -181,7 +160,7 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function InsightsPage() {
-  const { analytics, forecast, insights, dailyBrief, hasOpenAiKey } = useLoaderData<typeof loader>();
+  const { analytics, forecast, insights, dailyBrief, hasOpenAiKey, isSample } = useLoaderData<typeof loader>();
   const fetcher = useFetcher();
   const [question, setQuestion] = useState("");
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -228,6 +207,12 @@ export default function InsightsPage() {
                 Ask questions about your business data and get AI-powered answers
               </Text>
             </div>
+
+            {isSample && (
+              <Banner status="info" title="Demo Mode">
+                <p>Showing sample data. Connect your Shopify store via Settings to see live analytics.</p>
+              </Banner>
+            )}
 
             {!hasOpenAiKey && (
               <Banner status="warning" title="OpenAI API Key Required">

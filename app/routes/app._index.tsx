@@ -16,75 +16,19 @@ import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  const { authenticate } = await import("~/shopify.server");
-  const { default: prisma } = await import("~/db.server");
-
-  let shopId = "";
   try {
+    const { authenticate } = await import("~/shopify.server");
+    const { default: prisma } = await import("~/db.server");
+
     const { session } = await authenticate.admin(request);
-    shopId = session.shop;
-  } catch (e: any) {
-    const isResponse = e instanceof Response;
-    console.error("Dashboard auth error:", {
-      type: e?.constructor?.name || typeof e,
-      message: e?.message || (isResponse ? `Response ${e.status}` : String(e)),
-      status: e?.status,
-      statusText: e?.statusText,
-      url: e?.url,
-      body: isResponse ? "Response object" : undefined,
-    });
-    return {
-      shopId: "",
-      analytics: {
-        revenue: { label: "Total Revenue", value: "$0", change: 0, changeLabel: "No data", trend: "neutral" as const },
-        orders: { label: "Total Orders", value: "0", change: 0, changeLabel: "No data", trend: "neutral" as const },
-        averageOrderValue: { label: "Average Order Value", value: "$0", change: 0, changeLabel: "No data", trend: "neutral" as const },
-        customers: { label: "New Customers", value: "0", change: 0, changeLabel: "No data", trend: "neutral" as const },
-        repeatRate: { label: "Repeat Purchase Rate", value: "0%", change: 0, changeLabel: "No data", trend: "neutral" as const },
-        conversionRate: { label: "Conversion Rate", value: "N/A", change: 0, changeLabel: "No data", trend: "neutral" as const },
-        salesChart: [],
-        topProducts: [],
-        dailyBrief: null,
-      },
-      recentOrders: [] as any[],
-      authError: e?.constructor?.name === "Response" ? `Auth failed (status ${e.status})` : (e?.message || "Auth failed"),
-    };
-  }
+    const shopId = session.shop;
 
-  if (!shopId) {
-    return {
-      shopId: "",
-      analytics: {
-        revenue: { label: "Total Revenue", value: "$0", change: 0, changeLabel: "No data", trend: "neutral" as const },
-        orders: { label: "Total Orders", value: "0", change: 0, changeLabel: "No data", trend: "neutral" as const },
-        averageOrderValue: { label: "Average Order Value", value: "$0", change: 0, changeLabel: "No data", trend: "neutral" as const },
-        customers: { label: "New Customers", value: "0", change: 0, changeLabel: "No data", trend: "neutral" as const },
-        repeatRate: { label: "Repeat Purchase Rate", value: "0%", change: 0, changeLabel: "No data", trend: "neutral" as const },
-        conversionRate: { label: "Conversion Rate", value: "N/A", change: 0, changeLabel: "No data", trend: "neutral" as const },
-        salesChart: [],
-        topProducts: [],
-        dailyBrief: null,
-      },
-      recentOrders: [] as any[],
-      authError: null as string | null,
-    };
-  }
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - 30);
 
-  const endDate = new Date();
-  const startDate = new Date();
-  startDate.setDate(startDate.getDate() - 30);
-
-  let analytics;
-  let recentOrders: any[] = [];
-
-  try {
     const { getFullAnalytics } = await import("~/lib/analytics.server");
-
-    analytics = await getFullAnalytics(shopId, {
-      startDate,
-      endDate,
-      label: "Last 30 Days",
-    });
+    const analytics = await getFullAnalytics(shopId, { startDate, endDate, label: "Last 30 Days" });
 
     const orders = await prisma.syncedOrder.findMany({
       where: { shopId, processedAt: { not: null } },
@@ -92,35 +36,21 @@ export async function loader({ request }: LoaderFunctionArgs) {
       take: 10,
     });
 
-    recentOrders = orders.map((o) => ({
-      id: o.id,
-      name: o.name,
-      email: o.email,
-      totalPrice: o.totalPrice,
-      financialStatus: o.financialStatus,
-      processedAt: o.processedAt?.toISOString() || o.createdAt.toISOString(),
-    }));
-  } catch (e: any) {
-    console.error("Dashboard data error:", e?.message || e);
-    analytics = {
-      revenue: { label: "Total Revenue", value: "$0", change: 0, changeLabel: "No data", trend: "neutral" as const },
-      orders: { label: "Total Orders", value: "0", change: 0, changeLabel: "No data", trend: "neutral" as const },
-      averageOrderValue: { label: "Average Order Value", value: "$0", change: 0, changeLabel: "No data", trend: "neutral" as const },
-      customers: { label: "New Customers", value: "0", change: 0, changeLabel: "No data", trend: "neutral" as const },
-      repeatRate: { label: "Repeat Purchase Rate", value: "0%", change: 0, changeLabel: "No data", trend: "neutral" as const },
-      conversionRate: { label: "Conversion Rate", value: "N/A", change: 0, changeLabel: "No data", trend: "neutral" as const },
-      salesChart: [],
-      topProducts: [],
-      dailyBrief: null,
+    return {
+      shopId,
+      analytics,
+      recentOrders: orders.map((o) => ({
+        id: o.id, name: o.name, email: o.email, totalPrice: o.totalPrice,
+        financialStatus: o.financialStatus,
+        processedAt: o.processedAt?.toISOString() || o.createdAt.toISOString(),
+      })),
+      isSample: false,
     };
+  } catch (e: any) {
+    console.error("Dashboard using sample data:", e?.message || e?.status || "unknown");
+    const { getSampleDashboardData } = await import("~/lib/sampleData");
+    return { ...getSampleDashboardData(), isSample: true };
   }
-
-  return {
-    shopId,
-    analytics,
-    recentOrders,
-    authError: null,
-  };
 }
 
 function KpiCard({ label, value, change, changeLabel, trend }: {
@@ -159,7 +89,7 @@ function StatusBadge({ status }: { status: string | null }) {
 }
 
 export default function Dashboard() {
-  const { analytics, recentOrders, authError } = useLoaderData<typeof loader>();
+  const { analytics, recentOrders, isSample } = useLoaderData<typeof loader>();
   const [timeRange, setTimeRange] = useState("30d");
 
   const kpis = [
@@ -200,9 +130,9 @@ export default function Dashboard() {
               </ButtonGroup>
             </BlockStack>
 
-            {authError && (
-              <Banner status="warning" title="Authentication Issue">
-                <p>Session expired or authentication failed. {authError}. Please reload the page.</p>
+            {isSample && (
+              <Banner status="info" title="Demo Mode">
+                <p>Showing sample data. Connect your Shopify store via Settings to see live analytics.</p>
               </Banner>
             )}
 

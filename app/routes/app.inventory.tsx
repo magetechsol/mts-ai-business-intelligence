@@ -1,4 +1,4 @@
-import { Box, Layout, Text, Card, Grid, Badge, BlockStack } from "@shopify/polaris";
+import { Box, Layout, Text, Card, Grid, Badge, BlockStack, Banner } from "@shopify/polaris";
 import {
   PieChart,
   Pie,
@@ -23,13 +23,6 @@ const COLORS: Record<string, string> = {
 };
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  const empty = {
-    summary: { total: 0, inStock: 0, lowStock: 0, outOfStock: 0, totalUnits: 0, totalValue: 0 },
-    statusData: [] as any[],
-    lowStockItems: [] as any[],
-    inventoryByProduct: [] as any[],
-  };
-
   try {
     const { authenticate } = await import("~/shopify.server");
     const { getInventoryItems } = await import("~/lib/analytics.server");
@@ -67,15 +60,15 @@ export async function loader({ request }: LoaderFunctionArgs) {
     });
     const inventoryByProduct = Object.values(productMap).sort((a, b) => b.totalValue - a.totalValue).slice(0, 10);
 
-    return { summary, statusData, lowStockItems, inventoryByProduct };
-  } catch (e: any) {
-    console.error("Inventory auth error:", e?.message || e);
-    return empty;
+    return { summary, statusData, lowStockItems, inventoryByProduct, isSample: false };
+  } catch {
+    const { getSampleInventoryData } = await import("~/lib/sampleData");
+    return { ...getSampleInventoryData(), isSample: true };
   }
 }
 
 export default function InventoryPage() {
-  const { summary, statusData, lowStockItems, inventoryByProduct } = useLoaderData<typeof loader>();
+  const { summary, statusData, lowStockItems, inventoryByProduct, isSample } = useLoaderData<typeof loader>();
 
   return (
     <Box padding="400">
@@ -86,6 +79,12 @@ export default function InventoryPage() {
               <Text variant="headingXl" as="h1">Inventory Health</Text>
               <Text variant="bodyMd" as="p" color="subdued">Monitor stock levels and identify inventory issues</Text>
             </div>
+
+            {isSample && (
+              <Banner status="info" title="Demo Mode">
+                <p>Showing sample data. Connect your Shopify store via Settings to see live analytics.</p>
+              </Banner>
+            )}
 
             <Grid>
               {[

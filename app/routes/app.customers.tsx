@@ -1,4 +1,4 @@
-import { Box, Layout, Text, Card, Grid, Badge, BlockStack, Modal } from "@shopify/polaris";
+import { Box, Layout, Text, Card, Grid, Badge, BlockStack, Modal, Banner } from "@shopify/polaris";
 import {
   AreaChart,
   Area,
@@ -21,18 +21,6 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 const COLORS = ["#503ceb", "#4bb550", "#E4910B", "#D72C0D", "#503ceb"];
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  const emptyMetrics = {
-    totalCustomers: 0, newCustomers: 0, returningCustomers: 0,
-    repeatPurchaseRate: 0, averageLifetimeValue: 0, topCustomers: [] as any[],
-  };
-  const empty = {
-    metrics: emptyMetrics,
-    monthlyData: [] as any[],
-    customerSegments: [] as any[],
-    spendRanges: [] as any[],
-    customerOrders: {} as Record<string, any[]>,
-  };
-
   try {
     const { authenticate } = await import("~/shopify.server");
     const { getCustomerMetrics } = await import("~/lib/analytics.server");
@@ -104,15 +92,16 @@ export async function loader({ request }: LoaderFunctionArgs) {
     return {
       metrics, monthlyData, customerSegments, spendRanges: spendRanges.filter((r) => r.count > 0),
       customerOrders: ordersByEmail,
+      isSample: false,
     };
-  } catch (e: any) {
-    console.error("Customers auth error:", e?.message || e);
-    return empty;
+  } catch {
+    const { getSampleCustomersData } = await import("~/lib/sampleData");
+    return { ...getSampleCustomersData(), isSample: true };
   }
 }
 
 export default function CustomersPage() {
-  const { metrics, monthlyData, customerSegments, spendRanges, customerOrders } = useLoaderData<typeof loader>();
+  const { metrics, monthlyData, customerSegments, spendRanges, customerOrders, isSample } = useLoaderData<typeof loader>();
   const [selectedCustomer, setSelectedCustomer] = useState<typeof metrics.topCustomers[0] | null>(null);
 
   return (
@@ -124,6 +113,12 @@ export default function CustomersPage() {
               <Text variant="headingXl" as="h1">Customer Analytics</Text>
               <Text variant="bodyMd" as="p" color="subdued">Understand your customers and their purchasing behavior</Text>
             </div>
+
+            {isSample && (
+              <Banner status="info" title="Demo Mode">
+                <p>Showing sample data. Connect your Shopify store via Settings to see live analytics.</p>
+              </Banner>
+            )}
 
             <Grid>
               {[

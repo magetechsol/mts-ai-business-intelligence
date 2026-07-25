@@ -1,4 +1,4 @@
-import { Box, Layout, Text, Badge, Card, Grid, BlockStack } from "@shopify/polaris";
+import { Box, Layout, Text, Badge, Card, Grid, BlockStack, Banner } from "@shopify/polaris";
 import {
   AreaChart,
   Area,
@@ -21,15 +21,6 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 const COLORS = ["#503ceb", "#4bb550", "#E4910B", "#D72C0D", "#503ceb", "#503ceb"];
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  const empty = {
-    revenue: { label: "Total Revenue", value: "$0", change: 0, changeLabel: "No data", trend: "neutral" as const },
-    orders: { label: "Total Orders", value: "0", change: 0, changeLabel: "No data", trend: "neutral" as const },
-    aov: { label: "Avg Order Value", value: "$0", change: 0, changeLabel: "No data", trend: "neutral" as const },
-    salesChart: [] as any[],
-    statusData: [] as any[],
-    dayOfWeekData: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => ({ day, orders: 0 })),
-  };
-
   try {
     const { authenticate } = await import("~/shopify.server");
     const { getRevenueKpi, getOrdersKpi, getAovKpi, getSalesChart } = await import("~/lib/analytics.server");
@@ -69,21 +60,19 @@ export async function loader({ request }: LoaderFunctionArgs) {
     });
 
     return {
-      revenue,
-      orders,
-      aov,
-      salesChart,
+      revenue, orders, aov, salesChart,
       statusData: ordersByStatus.map((s) => ({ name: s.financialStatus || "Unknown", value: s._count.id })),
       dayOfWeekData: Object.values(dayCounts),
+      isSample: false,
     };
-  } catch (e: any) {
-    console.error("Sales auth error:", e?.message || e);
-    return empty;
+  } catch {
+    const { getSampleSalesData } = await import("~/lib/sampleData");
+    return { ...getSampleSalesData(), isSample: true };
   }
 }
 
 export default function SalesPage() {
-  const { revenue, orders, aov, salesChart, statusData, dayOfWeekData } = useLoaderData<typeof loader>();
+  const { revenue, orders, aov, salesChart, statusData, dayOfWeekData, isSample } = useLoaderData<typeof loader>();
 
   return (
     <Box padding="400">
@@ -94,6 +83,12 @@ export default function SalesPage() {
               <Text variant="headingXl" as="h1">Sales Analytics</Text>
               <Text variant="bodyMd" as="p" color="subdued">Detailed breakdown of your store performance</Text>
             </div>
+
+            {isSample && (
+              <Banner status="info" title="Demo Mode">
+                <p>Showing sample data. Connect your Shopify store via Settings to see live analytics.</p>
+              </Banner>
+            )}
 
             <Grid>
               <Grid.Cell columnSpan={{ xs: 6, sm: 4 }}>

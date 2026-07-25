@@ -6,14 +6,6 @@ import type { HeadersFunction, LoaderFunctionArgs, ActionFunctionArgs } from "re
 import { boundary } from "@shopify/shopify-app-react-router/server";
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  const empty = {
-    shopId: "",
-    shopName: "",
-    openaiKey: "",
-    syncEnabled: true,
-    lastSyncAt: null as string | null,
-  };
-
   try {
     const { authenticate } = await import("~/shopify.server");
     const { default: prisma } = await import("~/db.server");
@@ -29,10 +21,17 @@ export async function loader({ request }: LoaderFunctionArgs) {
       openaiKey: settings?.openaiKey || "",
       syncEnabled: settings?.syncEnabled ?? true,
       lastSyncAt: settings?.lastSyncAt?.toISOString() || null,
+      isSample: false,
     };
-  } catch (e: any) {
-    console.error("Settings auth error:", e?.message || e);
-    return empty;
+  } catch {
+    return {
+      shopId: "demo",
+      shopName: "demo.myshopify.com",
+      openaiKey: "",
+      syncEnabled: true,
+      lastSyncAt: null,
+      isSample: true,
+    };
   }
 }
 
@@ -70,7 +69,7 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function SettingsPage() {
-  const { shopName, openaiKey, lastSyncAt } = useLoaderData<typeof loader>();
+  const { shopName, openaiKey, lastSyncAt, isSample } = useLoaderData<typeof loader>();
   const fetcher = useFetcher();
   const [key, setKey] = useState(openaiKey);
 
@@ -86,6 +85,12 @@ export default function SettingsPage() {
               <Text variant="headingXl" as="h1">Settings</Text>
               <Text variant="bodyMd" as="p" color="subdued">Configure your MTS AI Business Intelligence app</Text>
             </div>
+
+            {isSample && (
+              <Banner status="info" title="Demo Mode">
+                <p>Showing sample data. Re-authenticate your app in Shopify admin to connect your store.</p>
+              </Banner>
+            )}
 
             <Card>
               <Box padding="400">

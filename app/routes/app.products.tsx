@@ -1,4 +1,4 @@
-import { Box, Layout, Text, Card, Grid, Badge, TextField, BlockStack, Modal } from "@shopify/polaris";
+import { Box, Layout, Text, Card, Grid, Badge, TextField, BlockStack, Modal, Banner } from "@shopify/polaris";
 import {
   BarChart,
   Bar,
@@ -14,13 +14,6 @@ import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  const empty = {
-    products: [] as any[],
-    typeData: [] as any[],
-    vendorData: [] as any[],
-    summary: { total: 0, active: 0, totalInventory: 0, lowStockProducts: 0, outOfStock: 0 },
-  };
-
   try {
     const { authenticate } = await import("~/shopify.server");
     const { default: prisma } = await import("~/db.server");
@@ -66,15 +59,16 @@ export async function loader({ request }: LoaderFunctionArgs) {
       typeData: productTypeData.map((d) => ({ name: d.productType || "Uncategorized", value: d._count.id })),
       vendorData: vendorData.slice(0, 10).map((d) => ({ name: d.vendor || "Unknown", value: d._count.id })),
       summary: { total: products.length, active: products.filter((p) => p.status === "ACTIVE").length, totalInventory, lowStockProducts, outOfStock },
+      isSample: false,
     };
-  } catch (e: any) {
-    console.error("Products auth error:", e?.message || e);
-    return empty;
+  } catch {
+    const { getSampleProductsData } = await import("~/lib/sampleData");
+    return { ...getSampleProductsData(), isSample: true };
   }
 }
 
 export default function ProductsPage() {
-  const { products, typeData, vendorData, summary } = useLoaderData<typeof loader>();
+  const { products, typeData, vendorData, summary, isSample } = useLoaderData<typeof loader>();
   const [searchValue, setSearchValue] = useState("");
   const [selectedProduct, setSelectedProduct] = useState<typeof products[0] | null>(null);
 
@@ -93,6 +87,12 @@ export default function ProductsPage() {
               <Text variant="headingXl" as="h1">Product Performance</Text>
               <Text variant="bodyMd" as="p" color="subdued">Analyze your product catalog and inventory levels</Text>
             </div>
+
+            {isSample && (
+              <Banner status="info" title="Demo Mode">
+                <p>Showing sample data. Connect your Shopify store via Settings to see live analytics.</p>
+              </Banner>
+            )}
 
             <Grid>
               {[

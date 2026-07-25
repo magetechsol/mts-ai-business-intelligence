@@ -142,12 +142,6 @@ export default function AppLayout() {
           navigation={navigationMarkup}
           showMobileNavigation={mobileNavActive}
           onNavigationDismiss={toggleMobileNav}
-          logo={{
-            width: 120,
-            topBarSource: "/favicon.ico",
-            accessibilityLabel: "MTS AI Business Intelligence",
-            url: "/app",
-          }}
         >
           {toastActive && <Toast content={toastMessage} onDismiss={() => setToastActive(false)} />}
           <Outlet />
