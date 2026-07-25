@@ -27,128 +27,157 @@ const SUGGESTED_QUESTIONS = [
 ];
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  const { authenticate } = await import("~/shopify.server");
-  const { getFullAnalytics } = await import("~/lib/analytics.server");
-  const { forecastRevenue } = await import("~/lib/forecast.server");
-  const { default: prisma } = await import("~/db.server");
-
-  const { session } = await authenticate.admin(request);
-  const shopId = session.shop;
-
-  const endDate = new Date();
-  const startDate = new Date();
-  startDate.setDate(startDate.getDate() - 30);
-
-  const analytics = await getFullAnalytics(shopId, {
-    startDate,
-    endDate,
-    label: "Last 30 Days",
-  });
-
-  const forecast = forecastRevenue(analytics.salesChart, 30);
-
-  const insights = await prisma.aiInsight.findMany({
-    where: { shopId, insightType: "chat" },
-    orderBy: { createdAt: "desc" },
-    take: 50,
-  });
-
-  const brief = await prisma.aiInsight.findFirst({
-    where: { shopId, insightType: "daily_brief" },
-    orderBy: { createdAt: "desc" },
-  });
-
-  return {
-    analytics,
-    forecast,
-    insights: insights.map((i) => ({
-      id: i.id,
-      question: i.question,
-      answer: i.answer,
-      createdAt: i.createdAt.toISOString(),
-    })),
-    dailyBrief: brief?.answer || null,
-    hasOpenAiKey: !!(typeof process !== "undefined" && process.env?.OPENAI_API_KEY && process.env.OPENAI_API_KEY !== "your_openai_api_key_here"),
+  const emptyAnalytics = {
+    revenue: { label: "Total Revenue", value: "$0", change: 0, changeLabel: "No data", trend: "neutral" as const },
+    orders: { label: "Total Orders", value: "0", change: 0, changeLabel: "No data", trend: "neutral" as const },
+    averageOrderValue: { label: "Average Order Value", value: "$0", change: 0, changeLabel: "No data", trend: "neutral" as const },
+    customers: { label: "New Customers", value: "0", change: 0, changeLabel: "No data", trend: "neutral" as const },
+    repeatRate: { label: "Repeat Purchase Rate", value: "0%", change: 0, changeLabel: "No data", trend: "neutral" as const },
+    conversionRate: { label: "Conversion Rate", value: "N/A", change: 0, changeLabel: "No data", trend: "neutral" as const },
+    salesChart: [] as any[],
+    topProducts: [] as any[],
+    dailyBrief: null as any,
   };
+  const empty = {
+    analytics: emptyAnalytics,
+    forecast: [] as any[],
+    insights: [] as any[],
+    dailyBrief: null as string | null,
+    hasOpenAiKey: false,
+  };
+
+  try {
+    const { authenticate } = await import("~/shopify.server");
+    const { getFullAnalytics } = await import("~/lib/analytics.server");
+    const { forecastRevenue } = await import("~/lib/forecast.server");
+    const { default: prisma } = await import("~/db.server");
+
+    const { session } = await authenticate.admin(request);
+    const shopId = session.shop;
+
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - 30);
+
+    const analytics = await getFullAnalytics(shopId, {
+      startDate,
+      endDate,
+      label: "Last 30 Days",
+    });
+
+    const forecast = forecastRevenue(analytics.salesChart, 30);
+
+    const insights = await prisma.aiInsight.findMany({
+      where: { shopId, insightType: "chat" },
+      orderBy: { createdAt: "desc" },
+      take: 50,
+    });
+
+    const brief = await prisma.aiInsight.findFirst({
+      where: { shopId, insightType: "daily_brief" },
+      orderBy: { createdAt: "desc" },
+    });
+
+    return {
+      analytics,
+      forecast,
+      insights: insights.map((i) => ({
+        id: i.id,
+        question: i.question,
+        answer: i.answer,
+        createdAt: i.createdAt.toISOString(),
+      })),
+      dailyBrief: brief?.answer || null,
+      hasOpenAiKey: !!(typeof process !== "undefined" && process.env?.OPENAI_API_KEY && process.env.OPENAI_API_KEY !== "your_openai_api_key_here"),
+    };
+  } catch (e: any) {
+    console.error("Insights auth error:", e?.message || e);
+    return empty;
+  }
 }
 
 export async function action({ request }: ActionFunctionArgs) {
-  const { authenticate } = await import("~/shopify.server");
-  const { getFullAnalytics } = await import("~/lib/analytics.server");
-  const { generateAiInsight } = await import("~/lib/ai.server");
-  const { default: prisma } = await import("~/db.server");
+  try {
+    const { authenticate } = await import("~/shopify.server");
+    const { getFullAnalytics } = await import("~/lib/analytics.server");
+    const { generateAiInsight } = await import("~/lib/ai.server");
+    const { default: prisma } = await import("~/db.server");
 
-  const { session } = await authenticate.admin(request);
-  const shopId = session.shop;
-  const formData = await request.formData();
-  const question = formData.get("question") as string;
+    const { session } = await authenticate.admin(request);
+    const shopId = session.shop;
+    const formData = await request.formData();
+    const question = formData.get("question") as string;
 
-  if (!question) {
-    return { error: "Please enter a question" };
-  }
+    if (!question) {
+      return { error: "Please enter a question" };
+    }
 
-  const endDate = new Date();
-  const startDate = new Date();
-  startDate.setDate(startDate.getDate() - 30);
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - 30);
 
-  const analytics = await getFullAnalytics(shopId, {
-    startDate,
-    endDate,
-    label: "Last 30 Days",
-  });
+    const analytics = await getFullAnalytics(shopId, {
+      startDate,
+      endDate,
+      label: "Last 30 Days",
+    });
 
-  const context = {
-    shopId,
-    dateRange: {
-      start: startDate.toISOString().split("T")[0],
-      end: endDate.toISOString().split("T")[0],
-    },
-    kpis: {
-      revenue: {
-        current: parseFloat(analytics.revenue.value.replace(/[$,]/g, "")) || 0,
-        previous: 0,
-        change: analytics.revenue.change,
-      },
-      orders: {
-        current: parseInt(analytics.orders.value.replace(/,/g, "")) || 0,
-        previous: 0,
-        change: analytics.orders.change,
-      },
-      aov: {
-        current: parseFloat(analytics.averageOrderValue.value.replace(/[$,]/g, "")) || 0,
-        change: analytics.averageOrderValue.change,
-      },
-      customers: {
-        new: parseInt(analytics.customers.value.replace(/,/g, "")) || 0,
-        returning: 0,
-      },
-      repeatRate: parseFloat(analytics.repeatRate.value.replace("%", "")) || 0,
-    },
-    topProducts: analytics.topProducts.map((p) => ({
-      title: p.title,
-      revenue: p.revenue,
-      quantity: p.quantity,
-      trend: p.trend,
-    })),
-    salesTrend: analytics.salesChart.map((s) => ({
-      date: s.date,
-      revenue: s.revenue,
-    })),
-  };
-
-  const answer = await generateAiInsight(context, question);
-
-  await prisma.aiInsight.create({
-    data: {
+    const context = {
       shopId,
-      insightType: "chat",
-      question,
-      answer,
-      data: JSON.stringify(context.kpis),
-    },
-  });
+      dateRange: {
+        start: startDate.toISOString().split("T")[0],
+        end: endDate.toISOString().split("T")[0],
+      },
+      kpis: {
+        revenue: {
+          current: parseFloat(analytics.revenue.value.replace(/[$,]/g, "")) || 0,
+          previous: 0,
+          change: analytics.revenue.change,
+        },
+        orders: {
+          current: parseInt(analytics.orders.value.replace(/,/g, "")) || 0,
+          previous: 0,
+          change: analytics.orders.change,
+        },
+        aov: {
+          current: parseFloat(analytics.averageOrderValue.value.replace(/[$,]/g, "")) || 0,
+          change: analytics.averageOrderValue.change,
+        },
+        customers: {
+          new: parseInt(analytics.customers.value.replace(/,/g, "")) || 0,
+          returning: 0,
+        },
+        repeatRate: parseFloat(analytics.repeatRate.value.replace("%", "")) || 0,
+      },
+      topProducts: analytics.topProducts.map((p) => ({
+        title: p.title,
+        revenue: p.revenue,
+        quantity: p.quantity,
+        trend: p.trend,
+      })),
+      salesTrend: analytics.salesChart.map((s) => ({
+        date: s.date,
+        revenue: s.revenue,
+      })),
+    };
 
-  return { answer, question };
+    const answer = await generateAiInsight(context, question);
+
+    await prisma.aiInsight.create({
+      data: {
+        shopId,
+        insightType: "chat",
+        question,
+        answer,
+        data: JSON.stringify(context.kpis),
+      },
+    });
+
+    return { answer, question };
+  } catch (e: any) {
+    console.error("Insights action error:", e?.message || e);
+    return { error: "Authentication failed. Please refresh and try again." };
+  }
 }
 
 export default function InsightsPage() {

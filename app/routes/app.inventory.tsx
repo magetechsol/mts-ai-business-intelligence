@@ -23,43 +23,55 @@ const COLORS: Record<string, string> = {
 };
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  const { authenticate } = await import("~/shopify.server");
-  const { getInventoryItems } = await import("~/lib/analytics.server");
-
-  const { session } = await authenticate.admin(request);
-  const shopId = session.shop;
-
-  const items = await getInventoryItems(shopId);
-
-  const summary = {
-    total: items.length,
-    inStock: items.filter((i) => i.status === "in_stock").length,
-    lowStock: items.filter((i) => i.status === "low_stock").length,
-    outOfStock: items.filter((i) => i.status === "out_of_stock").length,
-    totalUnits: items.reduce((sum, i) => sum + i.quantity, 0),
-    totalValue: items.reduce((sum, i) => sum + i.price * i.quantity, 0),
+  const empty = {
+    summary: { total: 0, inStock: 0, lowStock: 0, outOfStock: 0, totalUnits: 0, totalValue: 0 },
+    statusData: [] as any[],
+    lowStockItems: [] as any[],
+    inventoryByProduct: [] as any[],
   };
 
-  const statusData = [
-    { name: "In Stock", value: summary.inStock, color: COLORS.in_stock },
-    { name: "Low Stock", value: summary.lowStock, color: COLORS.low_stock },
-    { name: "Out of Stock", value: summary.outOfStock, color: COLORS.out_of_stock },
-  ].filter((s) => s.value > 0);
+  try {
+    const { authenticate } = await import("~/shopify.server");
+    const { getInventoryItems } = await import("~/lib/analytics.server");
 
-  const lowStockItems = items
-    .filter((i) => i.status === "low_stock" || i.status === "out_of_stock")
-    .sort((a, b) => a.quantity - b.quantity)
-    .slice(0, 20);
+    const { session } = await authenticate.admin(request);
+    const shopId = session.shop;
 
-  const productMap: Record<string, { title: string; totalInventory: number; totalValue: number }> = {};
-  items.forEach((item) => {
-    if (!productMap[item.productId]) productMap[item.productId] = { title: item.productTitle, totalInventory: 0, totalValue: 0 };
-    productMap[item.productId].totalInventory += item.quantity;
-    productMap[item.productId].totalValue += item.price * item.quantity;
-  });
-  const inventoryByProduct = Object.values(productMap).sort((a, b) => b.totalValue - a.totalValue).slice(0, 10);
+    const items = await getInventoryItems(shopId);
 
-  return { summary, statusData, lowStockItems, inventoryByProduct };
+    const summary = {
+      total: items.length,
+      inStock: items.filter((i) => i.status === "in_stock").length,
+      lowStock: items.filter((i) => i.status === "low_stock").length,
+      outOfStock: items.filter((i) => i.status === "out_of_stock").length,
+      totalUnits: items.reduce((sum, i) => sum + i.quantity, 0),
+      totalValue: items.reduce((sum, i) => sum + i.price * i.quantity, 0),
+    };
+
+    const statusData = [
+      { name: "In Stock", value: summary.inStock, color: COLORS.in_stock },
+      { name: "Low Stock", value: summary.lowStock, color: COLORS.low_stock },
+      { name: "Out of Stock", value: summary.outOfStock, color: COLORS.out_of_stock },
+    ].filter((s) => s.value > 0);
+
+    const lowStockItems = items
+      .filter((i) => i.status === "low_stock" || i.status === "out_of_stock")
+      .sort((a, b) => a.quantity - b.quantity)
+      .slice(0, 20);
+
+    const productMap: Record<string, { title: string; totalInventory: number; totalValue: number }> = {};
+    items.forEach((item) => {
+      if (!productMap[item.productId]) productMap[item.productId] = { title: item.productTitle, totalInventory: 0, totalValue: 0 };
+      productMap[item.productId].totalInventory += item.quantity;
+      productMap[item.productId].totalValue += item.price * item.quantity;
+    });
+    const inventoryByProduct = Object.values(productMap).sort((a, b) => b.totalValue - a.totalValue).slice(0, 10);
+
+    return { summary, statusData, lowStockItems, inventoryByProduct };
+  } catch (e: any) {
+    console.error("Inventory auth error:", e?.message || e);
+    return empty;
+  }
 }
 
 export default function InventoryPage() {

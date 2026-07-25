@@ -6,49 +6,67 @@ import type { HeadersFunction, LoaderFunctionArgs, ActionFunctionArgs } from "re
 import { boundary } from "@shopify/shopify-app-react-router/server";
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  const { authenticate } = await import("~/shopify.server");
-  const { default: prisma } = await import("~/db.server");
-
-  const { session } = await authenticate.admin(request);
-  const shopId = session.shop;
-
-  const settings = await prisma.appSettings.findUnique({ where: { shopId } });
-
-  return {
-    shopId,
-    shopName: session.shop,
-    openaiKey: settings?.openaiKey || "",
-    syncEnabled: settings?.syncEnabled ?? true,
-    lastSyncAt: settings?.lastSyncAt?.toISOString() || null,
+  const empty = {
+    shopId: "",
+    shopName: "",
+    openaiKey: "",
+    syncEnabled: true,
+    lastSyncAt: null as string | null,
   };
+
+  try {
+    const { authenticate } = await import("~/shopify.server");
+    const { default: prisma } = await import("~/db.server");
+
+    const { session } = await authenticate.admin(request);
+    const shopId = session.shop;
+
+    const settings = await prisma.appSettings.findUnique({ where: { shopId } });
+
+    return {
+      shopId,
+      shopName: session.shop,
+      openaiKey: settings?.openaiKey || "",
+      syncEnabled: settings?.syncEnabled ?? true,
+      lastSyncAt: settings?.lastSyncAt?.toISOString() || null,
+    };
+  } catch (e: any) {
+    console.error("Settings auth error:", e?.message || e);
+    return empty;
+  }
 }
 
 export async function action({ request }: ActionFunctionArgs) {
-  const { authenticate } = await import("~/shopify.server");
-  const { default: prisma } = await import("~/db.server");
+  try {
+    const { authenticate } = await import("~/shopify.server");
+    const { default: prisma } = await import("~/db.server");
 
-  const { session } = await authenticate.admin(request);
-  const shopId = session.shop;
-  const formData = await request.formData();
-  const intent = formData.get("intent") as string;
+    const { session } = await authenticate.admin(request);
+    const shopId = session.shop;
+    const formData = await request.formData();
+    const intent = formData.get("intent") as string;
 
-  if (intent === "save") {
-    const openaiKey = formData.get("openaiKey") as string;
-    await prisma.appSettings.upsert({
-      where: { shopId },
-      update: { openaiKey: openaiKey || null },
-      create: { shopId, openaiKey: openaiKey || null },
-    });
-    return { success: true, message: "Settings saved" };
+    if (intent === "save") {
+      const openaiKey = formData.get("openaiKey") as string;
+      await prisma.appSettings.upsert({
+        where: { shopId },
+        update: { openaiKey: openaiKey || null },
+        create: { shopId, openaiKey: openaiKey || null },
+      });
+      return { success: true, message: "Settings saved" };
+    }
+
+    if (intent === "sync") {
+      const { syncAllData } = await import("~/lib/sync.server");
+      const result = await syncAllData(request, shopId);
+      return { success: true, message: `Synced ${result.orders} orders, ${result.products} products, ${result.customers} customers` };
+    }
+
+    return { error: "Unknown action" };
+  } catch (e: any) {
+    console.error("Settings action error:", e?.message || e);
+    return { error: "Authentication failed. Please refresh and try again." };
   }
-
-  if (intent === "sync") {
-    const { syncAllData } = await import("~/lib/sync.server");
-    const result = await syncAllData(request, shopId);
-    return { success: true, message: `Synced ${result.orders} orders, ${result.products} products, ${result.customers} customers` };
-  }
-
-  return { error: "Unknown action" };
 }
 
 export default function SettingsPage() {

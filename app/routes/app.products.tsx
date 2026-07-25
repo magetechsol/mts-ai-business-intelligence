@@ -14,51 +14,63 @@ import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  const { authenticate } = await import("~/shopify.server");
-  const { default: prisma } = await import("~/db.server");
-
-  const { session } = await authenticate.admin(request);
-  const shopId = session.shop;
-
-  const products = await prisma.syncedProduct.findMany({
-    where: { shopId },
-    include: { variants: true },
-    orderBy: { title: "asc" },
-  });
-
-  const productTypeData = await prisma.syncedProduct.groupBy({
-    by: ["productType"],
-    where: { shopId, status: "ACTIVE" },
-    _count: { id: true },
-  });
-
-  const vendorData = await prisma.syncedProduct.groupBy({
-    by: ["vendor"],
-    where: { shopId, status: "ACTIVE" },
-    _count: { id: true },
-  });
-
-  const totalInventory = products.reduce(
-    (sum, p) => sum + p.variants.reduce((vSum, v) => vSum + v.inventory, 0), 0
-  );
-  const lowStockProducts = products.filter((p) => p.variants.some((v) => v.inventory > 0 && v.inventory <= 5)).length;
-  const outOfStock = products.filter((p) => p.variants.every((v) => v.inventory <= 0)).length;
-
-  return {
-    products: products.map((p) => ({
-      id: p.id, title: p.title, vendor: p.vendor, productType: p.productType,
-      status: p.status, totalVariants: p.totalVariants, imageCount: p.imageCount,
-      createdAt: p.createdAt.toISOString(),
-      totalInventory: p.variants.reduce((sum, v) => sum + v.inventory, 0),
-      totalValue: p.variants.reduce((sum, v) => sum + v.price * v.inventory, 0),
-      variants: p.variants.map((v) => ({
-        id: v.id, title: v.title, sku: v.sku, price: v.price, inventory: v.inventory,
-      })),
-    })),
-    typeData: productTypeData.map((d) => ({ name: d.productType || "Uncategorized", value: d._count.id })),
-    vendorData: vendorData.slice(0, 10).map((d) => ({ name: d.vendor || "Unknown", value: d._count.id })),
-    summary: { total: products.length, active: products.filter((p) => p.status === "ACTIVE").length, totalInventory, lowStockProducts, outOfStock },
+  const empty = {
+    products: [] as any[],
+    typeData: [] as any[],
+    vendorData: [] as any[],
+    summary: { total: 0, active: 0, totalInventory: 0, lowStockProducts: 0, outOfStock: 0 },
   };
+
+  try {
+    const { authenticate } = await import("~/shopify.server");
+    const { default: prisma } = await import("~/db.server");
+
+    const { session } = await authenticate.admin(request);
+    const shopId = session.shop;
+
+    const products = await prisma.syncedProduct.findMany({
+      where: { shopId },
+      include: { variants: true },
+      orderBy: { title: "asc" },
+    });
+
+    const productTypeData = await prisma.syncedProduct.groupBy({
+      by: ["productType"],
+      where: { shopId, status: "ACTIVE" },
+      _count: { id: true },
+    });
+
+    const vendorData = await prisma.syncedProduct.groupBy({
+      by: ["vendor"],
+      where: { shopId, status: "ACTIVE" },
+      _count: { id: true },
+    });
+
+    const totalInventory = products.reduce(
+      (sum, p) => sum + p.variants.reduce((vSum, v) => vSum + v.inventory, 0), 0
+    );
+    const lowStockProducts = products.filter((p) => p.variants.some((v) => v.inventory > 0 && v.inventory <= 5)).length;
+    const outOfStock = products.filter((p) => p.variants.every((v) => v.inventory <= 0)).length;
+
+    return {
+      products: products.map((p) => ({
+        id: p.id, title: p.title, vendor: p.vendor, productType: p.productType,
+        status: p.status, totalVariants: p.totalVariants, imageCount: p.imageCount,
+        createdAt: p.createdAt.toISOString(),
+        totalInventory: p.variants.reduce((sum, v) => sum + v.inventory, 0),
+        totalValue: p.variants.reduce((sum, v) => sum + v.price * v.inventory, 0),
+        variants: p.variants.map((v) => ({
+          id: v.id, title: v.title, sku: v.sku, price: v.price, inventory: v.inventory,
+        })),
+      })),
+      typeData: productTypeData.map((d) => ({ name: d.productType || "Uncategorized", value: d._count.id })),
+      vendorData: vendorData.slice(0, 10).map((d) => ({ name: d.vendor || "Unknown", value: d._count.id })),
+      summary: { total: products.length, active: products.filter((p) => p.status === "ACTIVE").length, totalInventory, lowStockProducts, outOfStock },
+    };
+  } catch (e: any) {
+    console.error("Products auth error:", e?.message || e);
+    return empty;
+  }
 }
 
 export default function ProductsPage() {

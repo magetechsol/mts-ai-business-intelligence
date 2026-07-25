@@ -21,77 +21,94 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 const COLORS = ["#503ceb", "#4bb550", "#E4910B", "#D72C0D", "#503ceb"];
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  const { authenticate } = await import("~/shopify.server");
-  const { getCustomerMetrics } = await import("~/lib/analytics.server");
-  const { default: prisma } = await import("~/db.server");
-
-  const { session } = await authenticate.admin(request);
-  const shopId = session.shop;
-
-  const endDate = new Date();
-  const startDate = new Date();
-  startDate.setDate(startDate.getDate() - 30);
-
-  const metrics = await getCustomerMetrics(shopId, { startDate, endDate, label: "Last 30 Days" });
-
-  const monthlyCustomers = await prisma.syncedCustomer.findMany({
-    where: { shopId },
-    select: { createdAt: true },
-    orderBy: { createdAt: "asc" },
-  });
-
-  const monthly: Record<string, { month: string; count: number }> = {};
-  monthlyCustomers.forEach((c) => {
-    const key = c.createdAt.toISOString().slice(0, 7);
-    if (!monthly[key]) monthly[key] = { month: key, count: 0 };
-    monthly[key].count++;
-  });
-  const monthlyData = Object.values(monthly).slice(-12);
-
-  const customerSegments = [
-    { name: "One-time Buyers", value: metrics.totalCustomers - metrics.returningCustomers },
-    { name: "Repeat Buyers", value: metrics.returningCustomers },
-  ].filter((s) => s.value > 0);
-
-  const spendRanges = [
-    { name: "$0-$50", min: 0, max: 50, count: 0 },
-    { name: "$50-$100", min: 50, max: 100, count: 0 },
-    { name: "$100-$250", min: 100, max: 250, count: 0 },
-    { name: "$250-$500", min: 250, max: 500, count: 0 },
-    { name: "$500+", min: 500, max: Infinity, count: 0 },
-  ];
-  metrics.topCustomers.forEach((c) => {
-    for (const range of spendRanges) {
-      if (c.totalSpent >= range.min && c.totalSpent < range.max) { range.count++; break; }
-    }
-  });
-
-  const topCustomerEmails = metrics.topCustomers
-    .map((c) => c.email)
-    .filter((e): e is string => !!e);
-
-  const customerOrders = topCustomerEmails.length > 0
-    ? await prisma.syncedOrder.findMany({
-        where: { shopId, customerEmail: { in: topCustomerEmails } },
-        orderBy: { processedAt: "desc" },
-        select: {
-          id: true, name: true, customerEmail: true, totalPrice: true,
-          financialStatus: true, processedAt: true,
-        },
-      })
-    : [];
-
-  const ordersByEmail: Record<string, typeof customerOrders> = {};
-  customerOrders.forEach((o) => {
-    const email = o.customerEmail || "";
-    if (!ordersByEmail[email]) ordersByEmail[email] = [];
-    ordersByEmail[email].push(o);
-  });
-
-  return {
-    metrics, monthlyData, customerSegments, spendRanges: spendRanges.filter((r) => r.count > 0),
-    customerOrders: ordersByEmail,
+  const emptyMetrics = {
+    totalCustomers: 0, newCustomers: 0, returningCustomers: 0,
+    repeatPurchaseRate: 0, averageLifetimeValue: 0, topCustomers: [] as any[],
   };
+  const empty = {
+    metrics: emptyMetrics,
+    monthlyData: [] as any[],
+    customerSegments: [] as any[],
+    spendRanges: [] as any[],
+    customerOrders: {} as Record<string, any[]>,
+  };
+
+  try {
+    const { authenticate } = await import("~/shopify.server");
+    const { getCustomerMetrics } = await import("~/lib/analytics.server");
+    const { default: prisma } = await import("~/db.server");
+
+    const { session } = await authenticate.admin(request);
+    const shopId = session.shop;
+
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - 30);
+
+    const metrics = await getCustomerMetrics(shopId, { startDate, endDate, label: "Last 30 Days" });
+
+    const monthlyCustomers = await prisma.syncedCustomer.findMany({
+      where: { shopId },
+      select: { createdAt: true },
+      orderBy: { createdAt: "asc" },
+    });
+
+    const monthly: Record<string, { month: string; count: number }> = {};
+    monthlyCustomers.forEach((c) => {
+      const key = c.createdAt.toISOString().slice(0, 7);
+      if (!monthly[key]) monthly[key] = { month: key, count: 0 };
+      monthly[key].count++;
+    });
+    const monthlyData = Object.values(monthly).slice(-12);
+
+    const customerSegments = [
+      { name: "One-time Buyers", value: metrics.totalCustomers - metrics.returningCustomers },
+      { name: "Repeat Buyers", value: metrics.returningCustomers },
+    ].filter((s) => s.value > 0);
+
+    const spendRanges = [
+      { name: "$0-$50", min: 0, max: 50, count: 0 },
+      { name: "$50-$100", min: 50, max: 100, count: 0 },
+      { name: "$100-$250", min: 100, max: 250, count: 0 },
+      { name: "$250-$500", min: 250, max: 500, count: 0 },
+      { name: "$500+", min: 500, max: Infinity, count: 0 },
+    ];
+    metrics.topCustomers.forEach((c) => {
+      for (const range of spendRanges) {
+        if (c.totalSpent >= range.min && c.totalSpent < range.max) { range.count++; break; }
+      }
+    });
+
+    const topCustomerEmails = metrics.topCustomers
+      .map((c) => c.email)
+      .filter((e): e is string => !!e);
+
+    const customerOrders = topCustomerEmails.length > 0
+      ? await prisma.syncedOrder.findMany({
+          where: { shopId, customerEmail: { in: topCustomerEmails } },
+          orderBy: { processedAt: "desc" },
+          select: {
+            id: true, name: true, customerEmail: true, totalPrice: true,
+            financialStatus: true, processedAt: true,
+          },
+        })
+      : [];
+
+    const ordersByEmail: Record<string, typeof customerOrders> = {};
+    customerOrders.forEach((o) => {
+      const email = o.customerEmail || "";
+      if (!ordersByEmail[email]) ordersByEmail[email] = [];
+      ordersByEmail[email].push(o);
+    });
+
+    return {
+      metrics, monthlyData, customerSegments, spendRanges: spendRanges.filter((r) => r.count > 0),
+      customerOrders: ordersByEmail,
+    };
+  } catch (e: any) {
+    console.error("Customers auth error:", e?.message || e);
+    return empty;
+  }
 }
 
 export default function CustomersPage() {

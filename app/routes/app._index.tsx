@@ -1,4 +1,4 @@
-import { Card, Text, Badge, BlockStack, Layout, Box, Button, ButtonGroup, Grid } from "@shopify/polaris";
+import { Card, Text, Badge, BlockStack, Layout, Box, Button, ButtonGroup, Grid, Banner } from "@shopify/polaris";
 import {
   AreaChart,
   Area,
@@ -23,7 +23,16 @@ export async function loader({ request }: LoaderFunctionArgs) {
   try {
     const { session } = await authenticate.admin(request);
     shopId = session.shop;
-  } catch {
+  } catch (e: any) {
+    const isResponse = e instanceof Response;
+    console.error("Dashboard auth error:", {
+      type: e?.constructor?.name || typeof e,
+      message: e?.message || (isResponse ? `Response ${e.status}` : String(e)),
+      status: e?.status,
+      statusText: e?.statusText,
+      url: e?.url,
+      body: isResponse ? "Response object" : undefined,
+    });
     return {
       shopId: "",
       analytics: {
@@ -38,6 +47,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         dailyBrief: null,
       },
       recentOrders: [] as any[],
+      authError: e?.constructor?.name === "Response" ? `Auth failed (status ${e.status})` : (e?.message || "Auth failed"),
     };
   }
 
@@ -56,6 +66,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         dailyBrief: null,
       },
       recentOrders: [] as any[],
+      authError: null as string | null,
     };
   }
 
@@ -108,6 +119,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     shopId,
     analytics,
     recentOrders,
+    authError: null,
   };
 }
 
@@ -147,7 +159,7 @@ function StatusBadge({ status }: { status: string | null }) {
 }
 
 export default function Dashboard() {
-  const { analytics, recentOrders } = useLoaderData<typeof loader>();
+  const { analytics, recentOrders, authError } = useLoaderData<typeof loader>();
   const [timeRange, setTimeRange] = useState("30d");
 
   const kpis = [
@@ -187,6 +199,12 @@ export default function Dashboard() {
                 ))}
               </ButtonGroup>
             </BlockStack>
+
+            {authError && (
+              <Banner status="warning" title="Authentication Issue">
+                <p>Session expired or authentication failed. {authError}. Please reload the page.</p>
+              </Banner>
+            )}
 
             <Grid>
               {kpis.map((kpi) => (

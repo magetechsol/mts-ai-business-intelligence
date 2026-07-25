@@ -21,51 +21,65 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 const COLORS = ["#503ceb", "#4bb550", "#E4910B", "#D72C0D", "#503ceb", "#503ceb"];
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  const { authenticate } = await import("~/shopify.server");
-  const { getRevenueKpi, getOrdersKpi, getAovKpi, getSalesChart } = await import("~/lib/analytics.server");
-  const { default: prisma } = await import("~/db.server");
-
-  const { session } = await authenticate.admin(request);
-  const shopId = session.shop;
-
-  const endDate = new Date();
-  const startDate = new Date();
-  startDate.setDate(startDate.getDate() - 30);
-  const range = { startDate, endDate, label: "Last 30 Days" };
-
-  const [revenue, orders, aov, salesChart] = await Promise.all([
-    getRevenueKpi(shopId, range),
-    getOrdersKpi(shopId, range),
-    getAovKpi(shopId, range),
-    getSalesChart(shopId, range),
-  ]);
-
-  const ordersByStatus = await prisma.syncedOrder.groupBy({
-    by: ["financialStatus"],
-    where: { shopId, processedAt: { gte: startDate, lt: endDate } },
-    _count: { id: true },
-  });
-
-  const hourlyOrders = await prisma.syncedOrder.findMany({
-    where: { shopId, processedAt: { gte: startDate, lt: endDate } },
-    select: { processedAt: true },
-  });
-
-  const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-  const dayCounts: Record<number, { day: string; orders: number }> = {};
-  dayNames.forEach((name, i) => { dayCounts[i] = { day: name, orders: 0 }; });
-  hourlyOrders.forEach((o) => {
-    if (o.processedAt) { dayCounts[o.processedAt.getDay()].orders += 1; }
-  });
-
-  return {
-    revenue,
-    orders,
-    aov,
-    salesChart,
-    statusData: ordersByStatus.map((s) => ({ name: s.financialStatus || "Unknown", value: s._count.id })),
-    dayOfWeekData: Object.values(dayCounts),
+  const empty = {
+    revenue: { label: "Total Revenue", value: "$0", change: 0, changeLabel: "No data", trend: "neutral" as const },
+    orders: { label: "Total Orders", value: "0", change: 0, changeLabel: "No data", trend: "neutral" as const },
+    aov: { label: "Avg Order Value", value: "$0", change: 0, changeLabel: "No data", trend: "neutral" as const },
+    salesChart: [] as any[],
+    statusData: [] as any[],
+    dayOfWeekData: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => ({ day, orders: 0 })),
   };
+
+  try {
+    const { authenticate } = await import("~/shopify.server");
+    const { getRevenueKpi, getOrdersKpi, getAovKpi, getSalesChart } = await import("~/lib/analytics.server");
+    const { default: prisma } = await import("~/db.server");
+
+    const { session } = await authenticate.admin(request);
+    const shopId = session.shop;
+
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - 30);
+    const range = { startDate, endDate, label: "Last 30 Days" };
+
+    const [revenue, orders, aov, salesChart] = await Promise.all([
+      getRevenueKpi(shopId, range),
+      getOrdersKpi(shopId, range),
+      getAovKpi(shopId, range),
+      getSalesChart(shopId, range),
+    ]);
+
+    const ordersByStatus = await prisma.syncedOrder.groupBy({
+      by: ["financialStatus"],
+      where: { shopId, processedAt: { gte: startDate, lt: endDate } },
+      _count: { id: true },
+    });
+
+    const hourlyOrders = await prisma.syncedOrder.findMany({
+      where: { shopId, processedAt: { gte: startDate, lt: endDate } },
+      select: { processedAt: true },
+    });
+
+    const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    const dayCounts: Record<number, { day: string; orders: number }> = {};
+    dayNames.forEach((name, i) => { dayCounts[i] = { day: name, orders: 0 }; });
+    hourlyOrders.forEach((o) => {
+      if (o.processedAt) { dayCounts[o.processedAt.getDay()].orders += 1; }
+    });
+
+    return {
+      revenue,
+      orders,
+      aov,
+      salesChart,
+      statusData: ordersByStatus.map((s) => ({ name: s.financialStatus || "Unknown", value: s._count.id })),
+      dayOfWeekData: Object.values(dayCounts),
+    };
+  } catch (e: any) {
+    console.error("Sales auth error:", e?.message || e);
+    return empty;
+  }
 }
 
 export default function SalesPage() {
