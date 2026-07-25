@@ -4,10 +4,6 @@ import {
   Frame,
   Toast,
   Button,
-  Card,
-  Text,
-  Banner,
-  Layout,
 } from "@shopify/polaris";
 import {
   HomeIcon,
@@ -215,37 +211,6 @@ export default function AppLayout() {
 
   const currentPath = location.pathname;
 
-  if (authError) {
-    return (
-      <div style={{ padding: "20px", fontFamily: "monospace", maxWidth: "800px", margin: "0 auto" }}>
-        <Banner title="Authentication Debug Info" tone="critical">
-          <pre style={{
-            whiteSpace: "pre-wrap",
-            fontSize: "12px",
-            background: "#f6f6f7",
-            padding: "15px",
-            borderRadius: "8px",
-            lineHeight: "1.6",
-            overflow: "auto",
-            maxHeight: "600px",
-          }}>
-            {authError}
-          </pre>
-        </Banner>
-        <div style={{ marginTop: "15px" }}>
-          <Text variant="headingMd" as="h2">What to check:</Text>
-          <ol style={{ fontSize: "14px", lineHeight: "1.8" }}>
-            <li>Go to <strong>Shopify Partners</strong> → Your App → <strong>API credentials</strong></li>
-            <li>Copy the <strong>API secret key</strong></li>
-            <li>Go to <strong>Render</strong> → your service → <strong>Environment</strong></li>
-            <li>Update <code>SHOPIFY_API_SECRET</code> to match the Partners dashboard value</li>
-            <li>Save and redeploy</li>
-          </ol>
-        </div>
-      </div>
-    );
-  }
-
   const navigationMarkup = (
     <Navigation location={currentPath}>
       <Navigation.Section
@@ -277,21 +242,49 @@ export default function AppLayout() {
 
   return (
     <AppProvider embedded apiKey={apiKey} i18n={i18n}>
-      <Frame
-        topBar={topBarMarkup}
-        navigation={navigationMarkup}
-        showMobileNavigation={mobileNavActive}
-        onNavigationDismiss={toggleMobileNav}
-        logo={{
-          width: 120,
-          topBarSource: "/favicon.ico",
-          accessibilityLabel: "MTS AI Business Intelligence",
-          url: "/app",
-        }}
-      >
-        {toastActive && <Toast content={toastMessage} onDismiss={() => setToastActive(false)} />}
-        <Outlet />
-      </Frame>
+      {authError ? (
+        <div style={{ padding: "20px", fontFamily: "monospace", maxWidth: "800px", margin: "0 auto" }}>
+          <h1 style={{ color: "#d72c0d" }}>Authentication Debug Info</h1>
+          <pre style={{
+            whiteSpace: "pre-wrap",
+            fontSize: "12px",
+            background: "#f6f6f7",
+            padding: "15px",
+            borderRadius: "8px",
+            lineHeight: "1.6",
+            overflow: "auto",
+            maxHeight: "600px",
+          }}>
+            {authError}
+          </pre>
+          <div style={{ marginTop: "15px" }}>
+            <h2>What to check:</h2>
+            <ol style={{ fontSize: "14px", lineHeight: "1.8" }}>
+              <li>Go to <strong>Shopify Partners</strong> &gt; Your App &gt; <strong>API credentials</strong></li>
+              <li>Copy the <strong>API secret key</strong></li>
+              <li>Go to <strong>Render</strong> &gt; your service &gt; <strong>Environment</strong></li>
+              <li>Update <code>SHOPIFY_API_SECRET</code> to match the Partners dashboard value</li>
+              <li>Save and redeploy</li>
+            </ol>
+          </div>
+        </div>
+      ) : (
+        <Frame
+          topBar={topBarMarkup}
+          navigation={navigationMarkup}
+          showMobileNavigation={mobileNavActive}
+          onNavigationDismiss={toggleMobileNav}
+          logo={{
+            width: 120,
+            topBarSource: "/favicon.ico",
+            accessibilityLabel: "MTS AI Business Intelligence",
+            url: "/app",
+          }}
+        >
+          {toastActive && <Toast content={toastMessage} onDismiss={() => setToastActive(false)} />}
+          <Outlet />
+        </Frame>
+      )}
     </AppProvider>
   );
 }
