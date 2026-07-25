@@ -5,6 +5,10 @@ import {
   Toast,
   Button,
   AppProvider as PolarisAppProvider,
+  Popover,
+  ActionList,
+  Avatar,
+  Box,
 } from "@shopify/polaris";
 import {
   HomeIcon,
@@ -90,8 +94,10 @@ export default function AppLayout() {
   const [toastActive, setToastActive] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
   const [mobileNavActive, setMobileNavActive] = useState(false);
+  const [userMenuActive, setUserMenuActive] = useState(false);
 
   const toggleMobileNav = useCallback(() => setMobileNavActive((o) => !o), []);
+  const toggleUserMenu = useCallback(() => setUserMenuActive((o) => !o), []);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -131,6 +137,40 @@ export default function AppLayout() {
     <TopBar
       showNavigationToggle
       onNavigationToggle={toggleMobileNav}
+      secondaryMenu={
+        <Popover
+          active={userMenuActive}
+          activator={
+            <Button
+              disclosure
+              onClick={toggleUserMenu}
+              icon={<Avatar customer size="small" />}
+            >
+              MTS AI BI
+            </Button>
+          }
+          onClose={toggleUserMenu}
+        >
+          <ActionList
+            items={[
+              {
+                content: "Settings",
+                icon: SettingsIcon,
+                onAction: () => { window.location.href = "/app/settings"; },
+              },
+              {
+                content: "Sync Data",
+                icon: RefreshIcon,
+                onAction: handleSync,
+              },
+              {
+                content: "Reload Page",
+                onAction: () => { window.location.reload(); },
+              },
+            ]}
+          />
+        </Popover>
+      }
     />
   );
 
