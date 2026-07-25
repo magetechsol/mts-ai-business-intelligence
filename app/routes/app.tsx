@@ -9,6 +9,7 @@ import {
   ActionList,
   Avatar,
   Box,
+  Text,
 } from "@shopify/polaris";
 import {
   HomeIcon,
@@ -133,10 +134,15 @@ export default function AppLayout() {
     </Navigation>
   );
 
+  const currentPage = navItems.find((item) =>
+    item.href === "/app" ? currentPath === "/app" : currentPath.startsWith(item.href)
+  );
+
   const topBarMarkup = (
     <TopBar
       showNavigationToggle
       onNavigationToggle={toggleMobileNav}
+      additionalMetadata={currentPage?.label || "Dashboard"}
       secondaryMenu={
         <Popover
           active={userMenuActive}
@@ -182,6 +188,13 @@ export default function AppLayout() {
           navigation={navigationMarkup}
           showMobileNavigation={mobileNavActive}
           onNavigationDismiss={toggleMobileNav}
+          logo={{
+            width: 32,
+            height: 32,
+            topBarSource: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23503ceb'/%3E%3Ctext x='16' y='22' font-size='16' fill='white' text-anchor='middle' font-family='Arial' font-weight='bold'%3EAI%3C/text%3E%3C/svg%3E",
+            accessibilityLabel: "MTS AI Business Intelligence",
+            url: "/app",
+          }}
         >
           {toastActive && <Toast content={toastMessage} onDismiss={() => setToastActive(false)} />}
           <Outlet />

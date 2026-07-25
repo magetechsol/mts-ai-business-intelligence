@@ -150,25 +150,31 @@ export default function Dashboard() {
                   <Box padding="400">
                     <BlockStack spacing="200">
                       <Text variant="headingLg" as="h2">Revenue Trend</Text>
-                      <div style={{ width: "100%", height: 300 }}>
-                        <ResponsiveContainer>
-                          <AreaChart data={analytics.salesChart}>
-                            <defs>
-                              <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor="#503ceb" stopOpacity={0.3} />
-                                <stop offset="95%" stopColor="#503ceb" stopOpacity={0} />
-                              </linearGradient>
-                            </defs>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#E1E3E5" />
-                            <XAxis dataKey="date" tick={{ fontSize: 12 }} tickFormatter={(v) => v.slice(5)} />
-                            <YAxis tick={{ fontSize: 12 }} tickFormatter={(v) => `$${v}`} />
-                            <Tooltip
-                              formatter={(value: number) => [`$${value.toFixed(2)}`, "Revenue"]}
-                              labelFormatter={(label) => `Date: ${label}`}
-                            />
-                            <Area type="monotone" dataKey="revenue" stroke="#503ceb" strokeWidth={2} fill="url(#colorRevenue)" />
-                          </AreaChart>
-                        </ResponsiveContainer>
+                      <div style={{ width: "100%", height: 300, minHeight: 300 }}>
+                        {analytics.salesChart.length > 0 ? (
+                          <ResponsiveContainer width="100%" height={300}>
+                            <AreaChart data={analytics.salesChart} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                              <defs>
+                                <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                                  <stop offset="5%" stopColor="#503ceb" stopOpacity={0.3} />
+                                  <stop offset="95%" stopColor="#503ceb" stopOpacity={0} />
+                                </linearGradient>
+                              </defs>
+                              <CartesianGrid strokeDasharray="3 3" stroke="#E1E3E5" />
+                              <XAxis dataKey="date" tick={{ fontSize: 12 }} tickFormatter={(v) => v.slice(5)} />
+                              <YAxis tick={{ fontSize: 12 }} tickFormatter={(v) => `$${v}`} />
+                              <Tooltip
+                                formatter={(value: number) => [`$${value.toFixed(2)}`, "Revenue"]}
+                                labelFormatter={(label) => `Date: ${label}`}
+                              />
+                              <Area type="monotone" dataKey="revenue" stroke="#503ceb" strokeWidth={2} fill="url(#colorRevenue)" />
+                            </AreaChart>
+                          </ResponsiveContainer>
+                        ) : (
+                          <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: 300, color: "#6D7175" }}>
+                            <Text variant="bodyMd" color="subdued">No revenue data available</Text>
+                          </div>
+                        )}
                       </div>
                     </BlockStack>
                   </Box>
@@ -180,16 +186,22 @@ export default function Dashboard() {
                   <Box padding="400">
                     <BlockStack spacing="200">
                       <Text variant="headingLg" as="h2">Top Products</Text>
-                      <div style={{ width: "100%", height: 300 }}>
-                        <ResponsiveContainer>
-                          <BarChart data={analytics.topProducts.slice(0, 5)} layout="vertical" margin={{ left: 0, right: 20 }}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#E1E3E5" />
-                            <XAxis type="number" tick={{ fontSize: 12 }} tickFormatter={(v) => `$${v}`} />
-                            <YAxis type="category" dataKey="title" tick={{ fontSize: 11 }} width={80} tickFormatter={(v) => v.length > 12 ? v.slice(0, 12) + "..." : v} />
-                            <Tooltip formatter={(value: number) => [`$${value.toFixed(2)}`, "Revenue"]} />
-                            <Bar dataKey="revenue" fill="#503ceb" radius={[0, 4, 4, 0]} />
-                          </BarChart>
-                        </ResponsiveContainer>
+                      <div style={{ width: "100%", height: 300, minHeight: 300 }}>
+                        {analytics.topProducts.length > 0 ? (
+                          <ResponsiveContainer width="100%" height={300}>
+                            <BarChart data={analytics.topProducts.slice(0, 5)} layout="vertical" margin={{ left: 0, right: 20 }}>
+                              <CartesianGrid strokeDasharray="3 3" stroke="#E1E3E5" />
+                              <XAxis type="number" tick={{ fontSize: 12 }} tickFormatter={(v) => `$${v}`} />
+                              <YAxis type="category" dataKey="title" tick={{ fontSize: 11 }} width={80} tickFormatter={(v) => v.length > 12 ? v.slice(0, 12) + "..." : v} />
+                              <Tooltip formatter={(value: number) => [`$${value.toFixed(2)}`, "Revenue"]} />
+                              <Bar dataKey="revenue" fill="#503ceb" radius={[0, 4, 4, 0]} />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        ) : (
+                          <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: 300, color: "#6D7175" }}>
+                            <Text variant="bodyMd" color="subdued">No product data available</Text>
+                          </div>
+                        )}
                       </div>
                     </BlockStack>
                   </Box>
