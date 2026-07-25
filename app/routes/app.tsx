@@ -4,6 +4,7 @@ import {
   Frame,
   Toast,
   Button,
+  AppProvider as PolarisAppProvider,
 } from "@shopify/polaris";
 import {
   HomeIcon,
@@ -20,7 +21,7 @@ import {
   Outlet,
   useLocation,
 } from "react-router";
-import { AppProvider } from "@shopify/shopify-app-react-router/react";
+import { AppProvider as ShopifyAppProvider } from "@shopify/shopify-app-react-router/react";
 
 const navItems = [
   { label: "Dashboard", href: "/app", icon: HomeIcon },
@@ -145,22 +146,24 @@ export default function AppLayout() {
   );
 
   return (
-    <AppProvider embedded apiKey={process.env.SHOPIFY_API_KEY || ""} i18n={i18n}>
-      <Frame
-        topBar={topBarMarkup}
-        navigation={navigationMarkup}
-        showMobileNavigation={mobileNavActive}
-        onNavigationDismiss={toggleMobileNav}
-        logo={{
-          width: 120,
-          topBarSource: "/favicon.ico",
-          accessibilityLabel: "MTS AI Business Intelligence",
-          url: "/app",
-        }}
-      >
-        {toastActive && <Toast content={toastMessage} onDismiss={() => setToastActive(false)} />}
-        <Outlet />
-      </Frame>
-    </AppProvider>
+    <ShopifyAppProvider embedded apiKey={process.env.SHOPIFY_API_KEY || ""}>
+      <PolarisAppProvider i18n={i18n}>
+        <Frame
+          topBar={topBarMarkup}
+          navigation={navigationMarkup}
+          showMobileNavigation={mobileNavActive}
+          onNavigationDismiss={toggleMobileNav}
+          logo={{
+            width: 120,
+            topBarSource: "/favicon.ico",
+            accessibilityLabel: "MTS AI Business Intelligence",
+            url: "/app",
+          }}
+        >
+          {toastActive && <Toast content={toastMessage} onDismiss={() => setToastActive(false)} />}
+          <Outlet />
+        </Frame>
+      </PolarisAppProvider>
+    </ShopifyAppProvider>
   );
 }
