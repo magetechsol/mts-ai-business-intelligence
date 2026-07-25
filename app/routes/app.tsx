@@ -4,6 +4,10 @@ import {
   Frame,
   Toast,
   Button,
+  Card,
+  Text,
+  Banner,
+  Layout,
 } from "@shopify/polaris";
 import {
   HomeIcon,
@@ -27,59 +31,97 @@ import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { AppProvider } from "@shopify/shopify-app-react-router/react";
 
-import { authenticate } from "~/shopify.server";
+import { authenticate, shopify } from "~/shopify.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const url = new URL(request.url);
-  const startTime = Date.now();
-  const log = (msg: string, extra?: any) => {
-    const elapsed = Date.now() - startTime;
-    const entry = `[APP ${elapsed}ms] ${msg}`;
-    if (extra) console.log(entry, JSON.stringify(extra).substring(0, 200));
-    else console.log(entry);
-  };
-
-  log("=== START ===", {
-    path: url.pathname,
-    hasIdToken: !!url.searchParams.get("id_token"),
-    hasHost: !!url.searchParams.get("host"),
-    hasShop: !!url.searchParams.get("shop"),
-    embedded: url.searchParams.get("embedded"),
-    hasAuthHeader: !!request.headers.get("authorization"),
-  });
+  const diagnostics: string[] = [];
 
   try {
-    log("Step 1: Calling authenticate.admin()...");
     const { session } = await authenticate.admin(request);
-    log("Step 2: Auth SUCCESS", {
-      shop: session.shop,
-      isOnline: session.isOnline,
-      scope: session.scope,
-    });
-    return { apiKey: process.env.SHOPIFY_API_KEY || "", shop: session.shop };
+    return { apiKey: process.env.SHOPIFY_API_KEY || "", shop: session.shop, authError: null };
   } catch (error) {
-    log("Step 2: Auth FAILED");
+    diagnostics.push(`Error type: ${error?.constructor?.name || typeof error}`);
+    diagnostics.push(`Is Response: ${error instanceof Response}`);
 
     if (error instanceof Response) {
-      const body = await error.clone().text().catch(() => "(empty)");
-      const headers: Record<string, string> = {};
-      error.headers.forEach((v, k) => (headers[k] = v));
-      log("Response caught", {
-        status: error.status,
-        statusText: error.statusText,
-        headers,
-        bodyLen: body.length,
-        bodyPreview: body.substring(0, 300),
-      });
-      throw error;
+      const body = await error.clone().text().catch(() => "");
+      diagnostics.push(`Status: ${error.status} ${error.statusText}`);
+      error.headers.forEach((v: string, k: string) => diagnostics.push(`Header ${k}: ${v}`));
+      diagnostics.push(`Body length: ${body.length}`);
+      if (body) diagnostics.push(`Body preview: ${body.substring(0, 500)}`);
+
+      if (error.status === 200 && body.includes("Shopify.API.init")) {
+        diagnostics.push("===> THIS IS AN APP BRIDGE BOUNCE PAGE (normal for first load)");
+        diagnostics.push("===> App Bridge should handle the session token exchange");
+      } else if (error.status === 302 || error.status === 301) {
+        diagnostics.push(`===> REDIRECT to: ${error.headers.get("location")}`);
+      } else if (error.status === 500) {
+        diagnostics.push("===> 500 from Shopify library. Testing JWT decode...");
+
+        const idToken = url.searchParams.get("id_token");
+        if (idToken) {
+          try {
+            const payload = await shopify.sessionStorage.loadSession
+              ? null
+              : null;
+          } catch {}
+          try {
+            const { shopifyApi, ApiVersion } = await import("@shopify/shopify-api");
+            const testApi = shopifyApi({
+              apiKey: process.env.SHOPIFY_API_KEY || "",
+              apiSecretKey: process.env.SHOPIFY_API_SECRET || "",
+              scopes: (process.env.SCOPES || "").split(","),
+              hostName: new URL(process.env.SHOPIFY_APP_URL || "http://localhost:3000").host,
+              hostScheme: "https",
+              isEmbeddedApp: true,
+              apiVersion: ApiVersion.July26,
+            });
+            try {
+              const decoded = await testApi.session.decodeSessionToken(idToken);
+              diagnostics.push("JWT decode SUCCESS - API secret matches Shopify Partners!");
+              diagnostics.push(`JWT dest (shop): ${decoded.dest}`);
+              diagnostics.push(`JWT aud (client_id): ${decoded.aud}`);
+              diagnostics.push(`JWT sub (user_id): ${decoded.sub}`);
+              diagnostics.push(`JWT exp: ${new Date(decoded.exp * 1000).toISOString()}`);
+              diagnostics.push(`JWT expired: ${decoded.exp * 1000 < Date.now()}`);
+              diagnostics.push(`Current time: ${new Date().toISOString()}`);
+            } catch (jwtErr: any) {
+              diagnostics.push(`JWT decode FAILED: ${jwtErr.message}`);
+              diagnostics.push("*** API SECRET MISMATCH - SHOPIFY_API_SECRET DOES NOT MATCH SHOPIFY PARTNERS ***");
+              diagnostics.push("");
+              diagnostics.push("TO FIX:");
+              diagnostics.push("1. Go to Shopify Partners → Your App → API credentials");
+              diagnostics.push("2. Click 'Reveal API secret key'");
+              diagnostics.push("3. Copy the EXACT secret key");
+              diagnostics.push("4. Go to Render → Environment → Edit SHOPIFY_API_SECRET");
+              diagnostics.push("5. Paste the exact secret key from step 2");
+              diagnostics.push("6. Save → Render will auto-redeploy");
+            }
+          } catch (modErr: any) {
+            diagnostics.push(`Module error: ${modErr.message}`);
+          }
+        } else {
+          diagnostics.push("No id_token in URL - cannot test JWT decode");
+        }
+
+        const id_token = url.searchParams.get("id_token");
+        const shop = url.searchParams.get("shop");
+        const host = url.searchParams.get("host");
+        diagnostics.push(`URL params: shop=${shop}, host=${host ? "present" : "MISSING"}, id_token=${id_token ? "present" : "MISSING"}`);
+      }
+    } else if (error instanceof Error) {
+      diagnostics.push(`Message: ${error.message}`);
+      diagnostics.push(`Stack: ${error.stack?.substring(0, 500)}`);
+    } else {
+      diagnostics.push(`Raw value: ${String(error)}`);
     }
 
-    log("Non-response error", {
-      name: error instanceof Error ? error.name : typeof error,
-      message: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack?.substring(0, 500) : "",
-    });
-    throw new Response("Authentication failed", { status: 401 });
+    return {
+      apiKey: process.env.SHOPIFY_API_KEY || "",
+      shop: url.searchParams.get("shop") || "",
+      authError: diagnostics.join("\n"),
+    };
   }
 };
 
@@ -150,7 +192,8 @@ const i18n = {
 
 export default function AppLayout() {
   const location = useLocation();
-  const { apiKey } = useLoaderData<typeof loader>();
+  const loaderData = useLoaderData<typeof loader>();
+  const { apiKey, authError } = loaderData;
 
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [toastActive, setToastActive] = useState(false);
@@ -180,6 +223,37 @@ export default function AppLayout() {
   };
 
   const currentPath = location.pathname;
+
+  if (authError) {
+    return (
+      <div style={{ padding: "20px", fontFamily: "monospace", maxWidth: "800px", margin: "0 auto" }}>
+        <Banner title="Authentication Debug Info" tone="critical">
+          <pre style={{
+            whiteSpace: "pre-wrap",
+            fontSize: "12px",
+            background: "#f6f6f7",
+            padding: "15px",
+            borderRadius: "8px",
+            lineHeight: "1.6",
+            overflow: "auto",
+            maxHeight: "600px",
+          }}>
+            {authError}
+          </pre>
+        </Banner>
+        <div style={{ marginTop: "15px" }}>
+          <Text variant="headingMd" as="h2">What to check:</Text>
+          <ol style={{ fontSize: "14px", lineHeight: "1.8" }}>
+            <li>Go to <strong>Shopify Partners</strong> → Your App → <strong>API credentials</strong></li>
+            <li>Copy the <strong>API secret key</strong></li>
+            <li>Go to <strong>Render</strong> → your service → <strong>Environment</strong></li>
+            <li>Update <code>SHOPIFY_API_SECRET</code> to match the Partners dashboard value</li>
+            <li>Save and redeploy</li>
+          </ol>
+        </div>
+      </div>
+    );
+  }
 
   const navigationMarkup = (
     <Navigation location={currentPath}>
@@ -244,7 +318,9 @@ export function ErrorBoundary() {
         <h1 style={{ color: "#d72c0d" }}>Error {error.status}</h1>
         <p>{error.statusText || "Unknown"}</p>
         <pre style={{ whiteSpace: "pre-wrap", fontSize: 12, background: "#f6f6f7", padding: 10 }}>
-          {JSON.stringify(error.data || null)}
+          {typeof error.data === "string" && error.data
+            ? error.data
+            : JSON.stringify(error.data || null)}
         </pre>
       </div>
     );
