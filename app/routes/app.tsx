@@ -19,102 +19,8 @@ import { useState, useCallback } from "react";
 import {
   Outlet,
   useLocation,
-  useLoaderData,
-  useRouteError,
-  isRouteErrorResponse,
 } from "react-router";
-import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
-import { boundary } from "@shopify/shopify-app-react-router/server";
 import { AppProvider } from "@shopify/shopify-app-react-router/react";
-
-import { authenticate } from "~/shopify.server";
-
-export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const url = new URL(request.url);
-  const diagnostics: string[] = [];
-
-  try {
-    const { session } = await authenticate.admin(request);
-    return { apiKey: process.env.SHOPIFY_API_KEY || "", shop: session.shop, authError: null };
-  } catch (error) {
-    if (error instanceof Response) {
-      if (error.status === 200) {
-        throw error;
-      }
-      if (error.status === 302 || error.status === 301) {
-        throw error;
-      }
-    }
-
-    diagnostics.push(`Error type: ${error?.constructor?.name || typeof error}`);
-    diagnostics.push(`Is Response: ${error instanceof Response}`);
-
-    if (error instanceof Response) {
-      const body = await error.clone().text().catch(() => "");
-      diagnostics.push(`Status: ${error.status} ${error.statusText}`);
-
-      if (error.status === 500) {
-        diagnostics.push("===> 500 from Shopify library. Testing JWT decode...");
-
-        const idToken = url.searchParams.get("id_token");
-        if (idToken) {
-          try {
-            const { shopifyApi, ApiVersion } = await import("@shopify/shopify-api");
-            const testApi = shopifyApi({
-              apiKey: process.env.SHOPIFY_API_KEY || "",
-              apiSecretKey: process.env.SHOPIFY_API_SECRET || "",
-              scopes: (process.env.SCOPES || "").split(","),
-              hostName: new URL(process.env.SHOPIFY_APP_URL || "http://localhost:3000").host,
-              hostScheme: "https",
-              isEmbeddedApp: true,
-              apiVersion: ApiVersion.July26,
-            });
-            try {
-              const decoded = await testApi.session.decodeSessionToken(idToken);
-              diagnostics.push("JWT decode SUCCESS - API secret matches Shopify Partners!");
-              diagnostics.push(`JWT dest (shop): ${decoded.dest}`);
-              diagnostics.push(`JWT aud (client_id): ${decoded.aud}`);
-              diagnostics.push(`JWT sub (user_id): ${decoded.sub}`);
-              diagnostics.push(`JWT exp: ${new Date(decoded.exp * 1000).toISOString()}`);
-              diagnostics.push(`JWT expired: ${decoded.exp * 1000 < Date.now()}`);
-              diagnostics.push(`Current time: ${new Date().toISOString()}`);
-            } catch (jwtErr: any) {
-              diagnostics.push(`JWT decode FAILED: ${jwtErr.message}`);
-              diagnostics.push("*** API SECRET MISMATCH ***");
-              diagnostics.push("");
-              diagnostics.push("TO FIX:");
-              diagnostics.push("1. Go to Shopify Partners > Your App > API credentials");
-              diagnostics.push("2. Click 'Reveal API secret key'");
-              diagnostics.push("3. Copy the EXACT secret key");
-              diagnostics.push("4. Go to Render > Environment > Edit SHOPIFY_API_SECRET");
-              diagnostics.push("5. Paste the exact secret key from step 2");
-              diagnostics.push("6. Save - Render will auto-redeploy");
-            }
-          } catch (modErr: any) {
-            diagnostics.push(`Module error: ${modErr.message}`);
-          }
-        } else {
-          diagnostics.push("No id_token in URL");
-        }
-      }
-    } else if (error instanceof Error) {
-      diagnostics.push(`Message: ${error.message}`);
-      diagnostics.push(`Stack: ${error.stack?.substring(0, 500)}`);
-    } else {
-      diagnostics.push(`Raw value: ${String(error)}`);
-    }
-
-    return {
-      apiKey: process.env.SHOPIFY_API_KEY || "",
-      shop: url.searchParams.get("shop") || "",
-      authError: diagnostics.join("\n"),
-    };
-  }
-};
-
-export const headers: HeadersFunction = (headersArgs) => {
-  return boundary.headers(headersArgs);
-};
 
 const navItems = [
   { label: "Dashboard", href: "/app", icon: HomeIcon },
@@ -179,8 +85,6 @@ const i18n = {
 
 export default function AppLayout() {
   const location = useLocation();
-  const loaderData = useLoaderData<typeof loader>();
-  const { apiKey, authError } = loaderData;
 
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [toastActive, setToastActive] = useState(false);
@@ -241,93 +145,22 @@ export default function AppLayout() {
   );
 
   return (
-    <AppProvider embedded apiKey={apiKey} i18n={i18n}>
-      {authError ? (
-        <div style={{ padding: "20px", fontFamily: "monospace", maxWidth: "800px", margin: "0 auto" }}>
-          <h1 style={{ color: "#d72c0d" }}>Authentication Debug Info</h1>
-          <pre style={{
-            whiteSpace: "pre-wrap",
-            fontSize: "12px",
-            background: "#f6f6f7",
-            padding: "15px",
-            borderRadius: "8px",
-            lineHeight: "1.6",
-            overflow: "auto",
-            maxHeight: "600px",
-          }}>
-            {authError}
-          </pre>
-          <div style={{ marginTop: "15px" }}>
-            <h2>What to check:</h2>
-            <ol style={{ fontSize: "14px", lineHeight: "1.8" }}>
-              <li>Go to <strong>Shopify Partners</strong> &gt; Your App &gt; <strong>API credentials</strong></li>
-              <li>Copy the <strong>API secret key</strong></li>
-              <li>Go to <strong>Render</strong> &gt; your service &gt; <strong>Environment</strong></li>
-              <li>Update <code>SHOPIFY_API_SECRET</code> to match the Partners dashboard value</li>
-              <li>Save and redeploy</li>
-            </ol>
-          </div>
-        </div>
-      ) : (
-        <Frame
-          topBar={topBarMarkup}
-          navigation={navigationMarkup}
-          showMobileNavigation={mobileNavActive}
-          onNavigationDismiss={toggleMobileNav}
-          logo={{
-            width: 120,
-            topBarSource: "/favicon.ico",
-            accessibilityLabel: "MTS AI Business Intelligence",
-            url: "/app",
-          }}
-        >
-          {toastActive && <Toast content={toastMessage} onDismiss={() => setToastActive(false)} />}
-          <Outlet />
-        </Frame>
-      )}
+    <AppProvider embedded apiKey={process.env.SHOPIFY_API_KEY || ""} i18n={i18n}>
+      <Frame
+        topBar={topBarMarkup}
+        navigation={navigationMarkup}
+        showMobileNavigation={mobileNavActive}
+        onNavigationDismiss={toggleMobileNav}
+        logo={{
+          width: 120,
+          topBarSource: "/favicon.ico",
+          accessibilityLabel: "MTS AI Business Intelligence",
+          url: "/app",
+        }}
+      >
+        {toastActive && <Toast content={toastMessage} onDismiss={() => setToastActive(false)} />}
+        <Outlet />
+      </Frame>
     </AppProvider>
-  );
-}
-
-export function ErrorBoundary() {
-  const error = useRouteError();
-
-  if (isRouteErrorResponse(error)) {
-    if (error.status === 200 && typeof error.data === "string") {
-      return <div dangerouslySetInnerHTML={{ __html: error.data }} />;
-    }
-
-    return (
-      <div style={{ padding: 20, fontFamily: "monospace" }}>
-        <h1 style={{ color: "#d72c0d" }}>Error {error.status}</h1>
-        <p>{error.statusText || "Unknown"}</p>
-        <pre style={{ whiteSpace: "pre-wrap", fontSize: 12, background: "#f6f6f7", padding: 10 }}>
-          {typeof error.data === "string" && error.data
-            ? error.data
-            : JSON.stringify(error.data || null)}
-        </pre>
-      </div>
-    );
-  }
-
-  if (error instanceof Error) {
-    return (
-      <div style={{ padding: 20, fontFamily: "monospace" }}>
-        <h1 style={{ color: "#d72c0d" }}>Error</h1>
-        <p>{error.message}</p>
-        <pre style={{ whiteSpace: "pre-wrap", fontSize: 12, background: "#f6f6f7", padding: 10 }}>
-          {error.stack}
-        </pre>
-      </div>
-    );
-  }
-
-  return (
-    <div style={{ padding: 20, fontFamily: "monospace" }}>
-      <h1 style={{ color: "#d72c0d" }}>Something went wrong</h1>
-      <pre style={{ whiteSpace: "pre-wrap", fontSize: 12, background: "#f6f6f7", padding: 10 }}>
-        {JSON.stringify(error)}
-      </pre>
-    </div>
   );
 }
