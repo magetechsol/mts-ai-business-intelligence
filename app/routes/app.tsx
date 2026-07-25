@@ -87,12 +87,10 @@ const i18n = {
 export default function AppLayout() {
   const location = useLocation();
 
-  const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [toastActive, setToastActive] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
   const [mobileNavActive, setMobileNavActive] = useState(false);
 
-  const toggleUserMenu = useCallback(() => setUserMenuOpen((o) => !o), []);
   const toggleMobileNav = useCallback(() => setMobileNavActive((o) => !o), []);
 
   const showToast = (msg: string) => {
@@ -133,15 +131,6 @@ export default function AppLayout() {
     <TopBar
       showNavigationToggle
       onNavigationToggle={toggleMobileNav}
-      userMenu={{
-        actions: [{ items: [{ content: "Settings", url: "/app/settings" }] }],
-        details: { name: "" },
-        open: userMenuOpen,
-        onToggle: toggleUserMenu,
-      }}
-      secondaryMenu={
-        <Button onClick={handleSync} icon={RefreshIcon}>Sync Data</Button>
-      }
     />
   );
 
