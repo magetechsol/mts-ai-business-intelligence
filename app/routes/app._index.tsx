@@ -32,9 +32,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
       })),
       isSample: false,
     };
-  } catch {
+  } catch (err: any) {
+    console.error("[AUTH FAIL]", err?.message || err, err?.stack);
     const { getSampleDashboardData } = await import("~/lib/sampleData");
-    return { ...getSampleDashboardData(), isSample: true };
+    return { ...getSampleDashboardData(), isSample: true, authError: err?.message || "unknown" };
   }
 }
 
@@ -48,7 +49,7 @@ const kpiIcons: Record<string, string> = {
 };
 
 export default function Dashboard() {
-  const { analytics, recentOrders, isSample } = useLoaderData<typeof loader>();
+  const { analytics, recentOrders, isSample, authError } = useLoaderData<typeof loader>();
   const [timeRange, setTimeRange] = useState("30d");
 
   const kpis = [
@@ -99,7 +100,7 @@ export default function Dashboard() {
         </div>
         {isSample && (
           <div style={{ marginTop: 12, padding: "10px 16px", borderRadius: 8, background: "rgba(37, 99, 235, 0.06)", border: "1px solid rgba(37, 99, 235, 0.15)", fontSize: 13, color: "var(--brand-primary-dark)" }}>
-            <strong>Demo Mode</strong> &mdash; Showing sample data. Connect your Shopify store via Settings to see live analytics.
+            <strong>Demo Mode</strong> &mdash; {authError ? `Auth error: ${authError}` : "Showing sample data. Connect your Shopify store via Settings to see live analytics."}
           </div>
         )}
       </div>

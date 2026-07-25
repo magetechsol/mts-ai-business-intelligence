@@ -28,6 +28,37 @@ function createApp() {
         interval: BillingInterval.Every30Days,
       },
     },
+    hooks: {
+      afterAuth: async ({ session, admin }) => {
+        const gdprTopics = [
+          "customers/data_request",
+          "customers/redact",
+          "shop/redact",
+        ];
+        const callbackUrl = `${process.env.SHOPIFY_APP_URL}/webhooks`;
+        for (const topic of gdprTopics) {
+          try {
+            const response = await admin.graphql(
+              `mutation webhookSubscriptionCreate($topic: WebhookSubscriptionTopic!, $callbackUrl: String!) {
+                webhookSubscriptionCreate(topic: $topic, callbackUrl: $callbackUrl) {
+                  webhookSubscription { id }
+                  userErrors { field message }
+                }
+              }`,
+              { variables: { topic, callbackUrl } }
+            );
+            const data = await response.json();
+            if (data.data?.webhookSubscriptionCreate?.userErrors?.length) {
+              console.log(`[GDPR] ${topic}: ${data.data.webhookSubscriptionCreate.userErrors[0].message}`);
+            } else {
+              console.log(`[GDPR] Registered: ${topic}`);
+            }
+          } catch (e: any) {
+            console.error(`[GDPR] Failed ${topic}:`, e?.message || e);
+          }
+        }
+      },
+    },
   });
 }
 
