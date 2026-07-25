@@ -27,10 +27,10 @@ import { AppProvider as ShopifyAppProvider } from "@shopify/shopify-app-react-ro
 const navItems = [
   { label: "Dashboard", href: "/app", icon: HomeIcon },
   { label: "Sales", href: "/app/sales", icon: OrderIcon },
-  { label: "Products", href: "/app/products", icon: ProductIcon },
-  { label: "Customers", href: "/app/customers", icon: PersonIcon },
-  { label: "Inventory", href: "/app/inventory", icon: InventoryIcon },
-  { label: "AI Insights", href: "/app/insights", icon: ChatIcon },
+  { label: "Products", href: "/app/products", icon: ProductIcon, pro: true },
+  { label: "Customers", href: "/app/customers", icon: PersonIcon, pro: true },
+  { label: "Inventory", href: "/app/inventory", icon: InventoryIcon, pro: true },
+  { label: "AI Insights", href: "/app/insights", icon: ChatIcon, pro: true },
   { label: "Settings", href: "/app/settings", icon: SettingsIcon },
 ];
 

@@ -12,10 +12,15 @@ const COLORS = ["#2563eb", "#059669", "#d97706", "#dc2626", "#7c3aed"];
 export async function loader({ request }: LoaderFunctionArgs) {
   try {
     const { authenticate } = await import("~/shopify.server");
-    const { getCustomerMetrics } = await import("~/lib/analytics.server");
+    const { getShopPlan } = await import("~/lib/billing.server");
     const { default: prisma } = await import("~/db.server");
     const { session } = await authenticate.admin(request);
     const shopId = session.shop;
+    const planInfo = await getShopPlan(shopId);
+    if (planInfo.isFree) {
+      return { metrics: { totalCustomers: 0, newCustomers: 0, returningCustomers: 0, repeatPurchaseRate: 0, averageLifetimeValue: 0, topCustomers: [] }, monthlyData: [], customerSegments: [], spendRanges: [], customerOrders: {}, isSample: false, isPro: false };
+    }
+    const { getCustomerMetrics } = await import("~/lib/analytics.server");
     const endDate = new Date();
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - 30);
@@ -47,16 +52,16 @@ export async function loader({ request }: LoaderFunctionArgs) {
     return {
       metrics, monthlyData, customerSegments, spendRanges: spendRanges.filter((r) => r.count > 0),
       customerOrders: {} as Record<string, any[]>,
-      isSample: false,
+      isSample: false, isPro: true,
     };
   } catch {
     const { getSampleCustomersData } = await import("~/lib/sampleData");
-    return { ...getSampleCustomersData(), isSample: true };
+    return { ...getSampleCustomersData(), isSample: true, isPro: true };
   }
 }
 
 export default function CustomersPage() {
-  const { metrics, monthlyData, customerSegments, spendRanges, isSample } = useLoaderData<typeof loader>();
+  const { metrics, monthlyData, customerSegments, spendRanges, isSample, isPro } = useLoaderData<typeof loader>();
   const [selected, setSelected] = useState<typeof metrics.topCustomers[0] | null>(null);
 
   return (
@@ -67,6 +72,17 @@ export default function CustomersPage() {
         {isSample && (
           <div style={{ marginTop: 12, padding: "10px 16px", borderRadius: 8, background: "rgba(37, 99, 235, 0.06)", border: "1px solid rgba(37, 99, 235, 0.15)", fontSize: 13, color: "var(--brand-primary-dark)" }}>
             <strong>Demo Mode</strong> &mdash; Showing sample data.
+          </div>
+        )}
+        {!isPro && (
+          <div style={{ marginTop: 12, padding: "16px 20px", borderRadius: 8, background: "linear-gradient(135deg, rgba(37, 99, 235, 0.06), rgba(124, 58, 237, 0.06))", border: "1px solid rgba(37, 99, 235, 0.15)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                <div style={{ fontWeight: 600, fontSize: 15, color: "var(--brand-text)" }}>Upgrade to Pro</div>
+                <div style={{ fontSize: 13, color: "var(--brand-text-muted)", marginTop: 4 }}>Unlock customer segmentation, acquisition tracking, and more for $29/mo</div>
+              </div>
+              <a href="/app/pricing" target="_top" style={{ padding: "8px 20px", borderRadius: 8, background: "var(--brand-gradient)", color: "#fff", fontSize: 13, fontWeight: 600, textDecoration: "none", flexShrink: 0 }}>View Plans</a>
+            </div>
           </div>
         )}
       </div>

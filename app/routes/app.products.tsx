@@ -9,9 +9,14 @@ import {
 export async function loader({ request }: LoaderFunctionArgs) {
   try {
     const { authenticate } = await import("~/shopify.server");
+    const { getShopPlan } = await import("~/lib/billing.server");
     const { default: prisma } = await import("~/db.server");
     const { session } = await authenticate.admin(request);
     const shopId = session.shop;
+    const planInfo = await getShopPlan(shopId);
+    if (planInfo.isFree) {
+      return { products: [], typeData: [], vendorData: [], summary: { total: 0, active: 0, totalInventory: 0, lowStockProducts: 0, outOfStock: 0 }, isSample: false, isPro: false };
+    }
     const products = await prisma.syncedProduct.findMany({ where: { shopId }, include: { variants: true }, orderBy: { title: "asc" } });
     const productTypeData = await prisma.syncedProduct.groupBy({ by: ["productType"], where: { shopId, status: "ACTIVE" }, _count: { id: true } });
     const vendorData = await prisma.syncedProduct.groupBy({ by: ["vendor"], where: { shopId, status: "ACTIVE" }, _count: { id: true } });
@@ -29,16 +34,16 @@ export async function loader({ request }: LoaderFunctionArgs) {
       typeData: productTypeData.map((d) => ({ name: d.productType || "Uncategorized", value: d._count.id })),
       vendorData: vendorData.slice(0, 10).map((d) => ({ name: d.vendor || "Unknown", value: d._count.id })),
       summary: { total: products.length, active: products.filter((p) => p.status === "ACTIVE").length, totalInventory, lowStockProducts, outOfStock },
-      isSample: false,
+      isSample: false, isPro: true,
     };
   } catch {
     const { getSampleProductsData } = await import("~/lib/sampleData");
-    return { ...getSampleProductsData(), isSample: true };
+    return { ...getSampleProductsData(), isSample: true, isPro: true };
   }
 }
 
 export default function ProductsPage() {
-  const { products, typeData, vendorData, summary, isSample } = useLoaderData<typeof loader>();
+  const { products, typeData, vendorData, summary, isSample, isPro } = useLoaderData<typeof loader>();
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<typeof products[0] | null>(null);
 
@@ -56,6 +61,17 @@ export default function ProductsPage() {
         {isSample && (
           <div style={{ marginTop: 12, padding: "10px 16px", borderRadius: 8, background: "rgba(37, 99, 235, 0.06)", border: "1px solid rgba(37, 99, 235, 0.15)", fontSize: 13, color: "var(--brand-primary-dark)" }}>
             <strong>Demo Mode</strong> &mdash; Showing sample data.
+          </div>
+        )}
+        {!isPro && (
+          <div style={{ marginTop: 12, padding: "16px 20px", borderRadius: 8, background: "linear-gradient(135deg, rgba(37, 99, 235, 0.06), rgba(124, 58, 237, 0.06))", border: "1px solid rgba(37, 99, 235, 0.15)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                <div style={{ fontWeight: 600, fontSize: 15, color: "var(--brand-text)" }}>Upgrade to Pro</div>
+                <div style={{ fontSize: 13, color: "var(--brand-text-muted)", marginTop: 4 }}>Unlock advanced product analytics, inventory monitoring, and more for $29/mo</div>
+              </div>
+              <a href="/app/pricing" target="_top" style={{ padding: "8px 20px", borderRadius: 8, background: "var(--brand-gradient)", color: "#fff", fontSize: 13, fontWeight: 600, textDecoration: "none", flexShrink: 0 }}>View Plans</a>
+            </div>
           </div>
         )}
       </div>

@@ -15,4 +15,4 @@ COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/public ./public
 RUN npx prisma generate
 EXPOSE 3000
-CMD ["sh", "-c", "npx prisma db push --skip-generate --accept-data-loss && npm start"]
+CMD ["sh", "-c", "npx prisma migrate deploy 2>/dev/null; npm start"]

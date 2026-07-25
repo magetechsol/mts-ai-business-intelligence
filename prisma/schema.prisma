@@ -155,11 +155,14 @@ model AiInsight {
 }
 
 model AppSettings {
-  id            String   @id @default(cuid())
-  shopId        String   @unique
-  openaiKey     String?
-  syncEnabled   Boolean  @default(true)
-  lastSyncAt    DateTime?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id              String   @id @default(cuid())
+  shopId          String   @unique
+  openaiKey       String?
+  syncEnabled     Boolean  @default(true)
+  lastSyncAt      DateTime?
+  plan            String   @default("free")
+  billingStatus   String   @default("active")
+  subscriptionId  String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 }

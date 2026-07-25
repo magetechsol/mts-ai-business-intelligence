@@ -12,10 +12,11 @@ export default [
     route("app/inventory", "routes/app.inventory.tsx"),
     route("app/insights", "routes/app.insights.tsx"),
     route("app/settings", "routes/app.settings.tsx"),
+    route("app/pricing", "routes/app.pricing.tsx"),
   ]),
   route("api/sync", "routes/api.sync.tsx"),
   route("api/ai", "routes/api.ai.tsx"),
-  route("health", "routes/health.tsx"),
-  route("debug", "routes/debug.tsx"),
   route("webhooks", "routes/webhooks.tsx"),
+  route("privacy", "routes/privacy.tsx"),
+  route("terms", "routes/terms.tsx"),
 ] satisfies RouteConfig;

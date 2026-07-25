@@ -1,6 +1,9 @@
-import { shopifyApp, ApiVersion } from "@shopify/shopify-app-react-router/server";
+import { shopifyApp, ApiVersion, BillingInterval } from "@shopify/shopify-app-react-router/server";
 import { PrismaSessionStorage } from "@shopify/shopify-app-session-storage-prisma";
 import prisma from "./db.server";
+
+export const FREE_PLAN = "free";
+export const PRO_PLAN = "pro_monthly";
 
 let app: ReturnType<typeof shopifyApp>;
 
@@ -18,6 +21,13 @@ function createApp() {
     isEmbeddedApp: true,
     authPathPrefix: "/auth",
     sessionStorage: new PrismaSessionStorage(prisma),
+    billing: {
+      [PRO_PLAN]: {
+        amount: 29.0,
+        currencyCode: "USD",
+        interval: BillingInterval.Every30Days,
+      },
+    },
   });
 }
 
