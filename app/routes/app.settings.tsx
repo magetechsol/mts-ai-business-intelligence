@@ -17,7 +17,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
       lastSyncAt: settings?.lastSyncAt?.toISOString() || null,
       isSample: false,
     };
-  } catch {
+  } catch (err: any) {
+    if (err instanceof Response && (err.status === 302 || err.status === 303)) throw err;
     return { shopId: "demo", shopName: "demo.myshopify.com", openaiKey: "", syncEnabled: true, lastSyncAt: null, isSample: true };
   }
 }

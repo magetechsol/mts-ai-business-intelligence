@@ -36,7 +36,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
       isSample: false,
     };
   } catch (err: any) {
-    console.error("[AUTH FAIL]", err?.message || err, err?.stack);
+    if (err instanceof Response && (err.status === 302 || err.status === 303)) {
+      throw err;
+    }
+    console.error("[AUTH FAIL]", err?.constructor?.name, err?.status, err?.statusText, err?.message || String(err));
     const { getSampleDashboardData } = await import("~/lib/sampleData");
     return { ...getSampleDashboardData(), isSample: true, authError: err?.message || "unknown" };
   }

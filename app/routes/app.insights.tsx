@@ -48,7 +48,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
       hasOpenAiKey: !!(typeof process !== "undefined" && process.env?.OPENAI_API_KEY && process.env.OPENAI_API_KEY !== "your_openai_api_key_here"),
       isSample: false, isPro: true,
     };
-  } catch {
+  } catch (err: any) {
+    if (err instanceof Response && (err.status === 302 || err.status === 303)) throw err;
     const { getSampleAnalytics } = await import("~/lib/sampleData");
     const sampleAnalytics = getSampleAnalytics();
     const { forecastRevenue } = await import("~/lib/forecast.server");

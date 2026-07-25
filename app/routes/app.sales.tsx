@@ -45,7 +45,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
       dayOfWeekData: Object.values(dayCounts),
       isSample: false,
     };
-  } catch {
+  } catch (err: any) {
+    if (err instanceof Response && (err.status === 302 || err.status === 303)) throw err;
     const { getSampleSalesData } = await import("~/lib/sampleData");
     return { ...getSampleSalesData(), isSample: true };
   }

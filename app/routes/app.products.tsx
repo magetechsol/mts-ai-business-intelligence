@@ -36,7 +36,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
       summary: { total: products.length, active: products.filter((p) => p.status === "ACTIVE").length, totalInventory, lowStockProducts, outOfStock },
       isSample: false, isPro: true,
     };
-  } catch {
+  } catch (err: any) {
+    if (err instanceof Response && (err.status === 302 || err.status === 303)) throw err;
     const { getSampleProductsData } = await import("~/lib/sampleData");
     return { ...getSampleProductsData(), isSample: true, isPro: true };
   }
