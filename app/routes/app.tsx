@@ -21,10 +21,16 @@ import { useState, useCallback, useEffect } from "react";
 import {
   Outlet,
   useLocation,
+  useLoaderData,
   isRouteErrorResponse,
   useRouteError,
 } from "react-router";
+import type { LoaderFunctionArgs } from "react-router";
 import { AppProvider as ShopifyAppProvider } from "@shopify/shopify-app-react-router/react";
+
+export async function loader({ request }: LoaderFunctionArgs) {
+  return { apiKey: process.env.SHOPIFY_API_KEY || "" };
+}
 
 const navItems = [
   { label: "Dashboard", href: "/app", icon: HomeIcon },
@@ -89,6 +95,7 @@ const i18n = {
 
 export default function AppLayout() {
   const location = useLocation();
+  const { apiKey } = useLoaderData<typeof loader>();
 
   const [toastActive, setToastActive] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
@@ -225,7 +232,7 @@ export default function AppLayout() {
   );
 
   return (
-    <ShopifyAppProvider embedded apiKey={process.env.SHOPIFY_API_KEY || ""}>
+    <ShopifyAppProvider embedded apiKey={apiKey}>
       <PolarisAppProvider i18n={i18n}>
         <Frame
           topBar={topBarMarkup}
