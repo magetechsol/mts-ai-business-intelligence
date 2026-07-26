@@ -36,6 +36,8 @@ redirect_urls = [
   "https://mts-ai-business-intelligence.onrender.com/api/auth/callback"
 ]
 
+[direct_api_access]
+
 [app_proxy]
 url = "https://mts-ai-business-intelligence.onrender.com/api/proxy"
 subpath = "apps"
