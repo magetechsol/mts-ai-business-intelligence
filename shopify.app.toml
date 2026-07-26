@@ -27,7 +27,7 @@ topics = ["app_subscriptions/update"]
 uri = "/webhooks"
 
 [access_scopes]
-scopes = "read_analytics,read_content,read_customers,read_inventory,read_orders,read_products,read_shop_analytics"
+scopes = "read_analytics,read_content,read_customers,read_inventory,read_orders,read_products"
 
 [access.admin]
 embedded_app_direct_api_access = true
