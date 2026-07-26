@@ -49,7 +49,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       isSample: false, isPro: true,
     };
   } catch (err: any) {
-    if (err instanceof Response) return err;
+    if (err instanceof Response) throw err;
     const { getSampleAnalytics } = await import("~/lib/sampleData");
     const sampleAnalytics = getSampleAnalytics();
     const { forecastRevenue } = await import("~/lib/forecast.server");

@@ -46,7 +46,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       isSample: false,
     };
   } catch (err: any) {
-    if (err instanceof Response) return err;
+    if (err instanceof Response) throw err;
     const { getSampleSalesData } = await import("~/lib/sampleData");
     return { ...getSampleSalesData(), isSample: true };
   }

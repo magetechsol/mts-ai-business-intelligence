@@ -17,10 +17,13 @@ import {
   SettingsIcon,
   RefreshIcon,
 } from "@shopify/polaris-icons";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import {
   Outlet,
   useLocation,
+  isRouteErrorResponse,
+  useRouteError,
+  Link,
 } from "react-router";
 import { AppProvider as ShopifyAppProvider } from "@shopify/shopify-app-react-router/react";
 
@@ -243,5 +246,51 @@ export default function AppLayout() {
         </Frame>
       </PolarisAppProvider>
     </ShopifyAppProvider>
+  );
+}
+
+export function ErrorBoundary() {
+  const error = useRouteError();
+  const [bounceHtml, setBounceHtml] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (error instanceof Response) {
+      error.clone().text().then(setBounceHtml);
+    }
+  }, [error]);
+
+  if (error instanceof Response) {
+    if (bounceHtml) {
+      return (
+        <div
+          dangerouslySetInnerHTML={{ __html: bounceHtml }}
+          style={{ width: "100%", height: "100vh" }}
+        />
+      );
+    }
+    return null;
+  }
+
+  if (isRouteErrorResponse(error)) {
+    return (
+      <div style={{ padding: 40, textAlign: "center", fontFamily: "system-ui, sans-serif" }}>
+        <h1 style={{ fontSize: 24, marginBottom: 8 }}>Error {error.status}</h1>
+        <p style={{ color: "#666", marginBottom: 16 }}>{error.statusText || "Something went wrong"}</p>
+        <Link to="/app" style={{ color: "#2563eb" }}>Return to Dashboard</Link>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ padding: 40, textAlign: "center", fontFamily: "system-ui, sans-serif" }}>
+      <h1 style={{ fontSize: 24, marginBottom: 8 }}>Something went wrong</h1>
+      <p style={{ color: "#666", marginBottom: 16 }}>Please try refreshing the page.</p>
+      <button
+        onClick={() => window.location.reload()}
+        style={{ padding: "8px 20px", borderRadius: 8, background: "#2563eb", color: "#fff", border: "none", cursor: "pointer", fontSize: 14 }}
+      >
+        Reload
+      </button>
+    </div>
   );
 }

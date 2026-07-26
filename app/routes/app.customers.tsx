@@ -55,7 +55,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       isSample: false, isPro: true,
     };
   } catch (err: any) {
-    if (err instanceof Response) return err;
+    if (err instanceof Response) throw err;
     const { getSampleCustomersData } = await import("~/lib/sampleData");
     return { ...getSampleCustomersData(), isSample: true, isPro: true };
   }
