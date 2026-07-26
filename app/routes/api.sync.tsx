@@ -19,6 +19,7 @@ export async function action({ request }: ActionFunctionArgs) {
       headers: { "Content-Type": "application/json" },
     });
   } catch (error) {
+    if (error instanceof Response) return error;
     console.error("Sync error:", error);
     return new Response(
       JSON.stringify({ error: "Sync failed" }),

@@ -39,6 +39,7 @@ export async function action({ request }: ActionFunctionArgs) {
       { status: 200, headers: { "Content-Type": "application/json" } }
     );
   } catch (error) {
+    if (error instanceof Response) return error;
     console.error("AI API error:", error);
     return new Response(
       JSON.stringify({ error: "Failed to generate insight" }),

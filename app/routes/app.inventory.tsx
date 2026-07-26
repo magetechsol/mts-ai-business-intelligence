@@ -51,7 +51,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     const inventoryByProduct = Object.values(productMap).sort((a, b) => b.totalValue - a.totalValue).slice(0, 10);
     return { summary, statusData, lowStockItems, inventoryByProduct, isSample: false, isPro: true };
   } catch (err: any) {
-    if (err instanceof Response && (err.status === 302 || err.status === 303)) throw err;
+    if (err instanceof Response) return err;
     const { getSampleInventoryData } = await import("~/lib/sampleData");
     return { ...getSampleInventoryData(), isSample: true, isPro: true };
   }

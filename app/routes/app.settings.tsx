@@ -18,7 +18,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       isSample: false,
     };
   } catch (err: any) {
-    if (err instanceof Response && (err.status === 302 || err.status === 303)) throw err;
+    if (err instanceof Response) return err;
     return { shopId: "demo", shopName: "demo.myshopify.com", openaiKey: "", syncEnabled: true, lastSyncAt: null, isSample: true };
   }
 }
@@ -47,6 +47,7 @@ export async function action({ request }: ActionFunctionArgs) {
     }
     return { error: "Unknown action" };
   } catch (e: any) {
+    if (e instanceof Response) return e;
     console.error("Settings action error:", e?.message || e);
     return { error: "Authentication failed. Please refresh and try again." };
   }
