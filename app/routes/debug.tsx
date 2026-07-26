@@ -58,7 +58,3 @@ export async function loader({ request }: any) {
     headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
   });
 }
-
-export default function Debug() {
-  return null;
-}
