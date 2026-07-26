@@ -250,24 +250,6 @@ export default function AppLayout() {
 
 export function ErrorBoundary() {
   const error = useRouteError();
-  const [html, setHtml] = useState<string | null>(null);
-
-  useEffect(() => {
-    const data = isRouteErrorResponse(error) ? error.data : error instanceof Response ? error : null;
-    if (typeof data === "string" && data.includes("<script")) {
-      setHtml(data);
-    }
-  }, [error]);
-
-  useEffect(() => {
-    if (html) {
-      document.open();
-      document.write(html);
-      document.close();
-    }
-  }, [html]);
-
-  if (html) return null;
 
   let message = "Something went wrong";
   let detail = "An unexpected error occurred. Please try refreshing the page.";
