@@ -22,6 +22,7 @@ import {
   Outlet,
   useLocation,
   useLoaderData,
+  useNavigate,
   isRouteErrorResponse,
   useRouteError,
 } from "react-router";
@@ -29,7 +30,12 @@ import type { LoaderFunctionArgs } from "react-router";
 import { AppProvider as ShopifyAppProvider } from "@shopify/shopify-app-react-router/react";
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  return { apiKey: process.env.SHOPIFY_API_KEY || "" };
+  const url = new URL(request.url);
+  return {
+    apiKey: process.env.SHOPIFY_API_KEY || "",
+    shop: url.searchParams.get("shop") || "",
+    host: url.searchParams.get("host") || "",
+  };
 }
 
 const navItems = [
@@ -95,7 +101,8 @@ const i18n = {
 
 export default function AppLayout() {
   const location = useLocation();
-  const { apiKey } = useLoaderData<typeof loader>();
+  const navigate = useNavigate();
+  const { apiKey, shop, host } = useLoaderData<typeof loader>();
 
   const [toastActive, setToastActive] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
@@ -131,7 +138,7 @@ export default function AppLayout() {
       <Navigation.Section
         items={navItems.map((item) => ({
           label: item.pro ? `${item.label}` : item.label,
-          url: item.href,
+          onClick: () => navigate(item.href),
           icon: item.icon,
           selected: item.href === "/app" ? currentPath === "/app" : currentPath.startsWith(item.href),
           badge: item.pro ? "PRO" : undefined,
@@ -208,12 +215,12 @@ export default function AppLayout() {
               {
                 content: "Upgrade to Pro",
                 icon: SettingsIcon,
-                onAction: () => { window.location.href = "/app/pricing"; },
+                onAction: () => navigate("/app/pricing"),
               },
               {
                 content: "Settings",
                 icon: SettingsIcon,
-                onAction: () => { window.location.href = "/app/settings"; },
+                onAction: () => navigate("/app/settings"),
               },
               {
                 content: "Sync Data",
@@ -232,7 +239,7 @@ export default function AppLayout() {
   );
 
   return (
-    <ShopifyAppProvider embedded apiKey={apiKey}>
+    <ShopifyAppProvider embedded apiKey={apiKey} shop={shop} host={host}>
       <PolarisAppProvider i18n={i18n}>
         <Frame
           topBar={topBarMarkup}
