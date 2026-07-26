@@ -12,7 +12,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     const { getShopPlan } = await import("~/lib/billing.server");
     const { default: prisma } = await import("~/db.server");
     const authResult = await authenticate.admin(request);
-    if (authResult instanceof Response) return authResult;
+    if (authResult instanceof Response) throw authResult;
     const { session } = authResult;
     const shopId = session.shop;
     const planInfo = await getShopPlan(shopId);
@@ -39,7 +39,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       isSample: false, isPro: true,
     };
   } catch (err: any) {
-    if (err instanceof Response) return err;
+    if (err instanceof Response) throw err;
     const { getSampleProductsData } = await import("~/lib/sampleData");
     return { ...getSampleProductsData(), isSample: true, isPro: true };
   }

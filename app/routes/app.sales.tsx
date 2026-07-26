@@ -15,7 +15,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     const { getRevenueKpi, getOrdersKpi, getAovKpi, getSalesChart } = await import("~/lib/analytics.server");
     const { default: prisma } = await import("~/db.server");
     const authResult = await authenticate.admin(request);
-    if (authResult instanceof Response) return authResult;
+    if (authResult instanceof Response) throw authResult;
     const { session } = authResult;
     const shopId = session.shop;
     const endDate = new Date();
@@ -48,7 +48,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       isSample: false,
     };
   } catch (err: any) {
-    if (err instanceof Response) return err;
+    if (err instanceof Response) throw err;
     const { getSampleSalesData } = await import("~/lib/sampleData");
     return { ...getSampleSalesData(), isSample: true };
   }

@@ -15,7 +15,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     const { authenticate } = await import("~/shopify.server");
     const { default: prisma } = await import("~/db.server");
     const authResult = await authenticate.admin(request);
-    if (authResult instanceof Response) return authResult;
+    if (authResult instanceof Response) throw authResult;
     const { session } = authResult;
     const shopId = session.shop;
     const endDate = new Date();
@@ -38,7 +38,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       isSample: false,
     };
   } catch (err: any) {
-    if (err instanceof Response) return err;
+    if (err instanceof Response) throw err;
     console.error("[AUTH FAIL]", err?.constructor?.name, err?.status, err?.statusText, err?.message || String(err));
     const { getSampleDashboardData } = await import("~/lib/sampleData");
     return { ...getSampleDashboardData(), isSample: true, authError: err?.message || "Authentication required" };

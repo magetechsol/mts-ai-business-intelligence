@@ -18,7 +18,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     const { authenticate } = await import("~/shopify.server");
     const { getShopPlan } = await import("~/lib/billing.server");
     const authResult = await authenticate.admin(request);
-    if (authResult instanceof Response) return authResult;
+    if (authResult instanceof Response) throw authResult;
     const { session } = authResult;
     const shopId = session.shop;
     const planInfo = await getShopPlan(shopId);
@@ -53,7 +53,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     const inventoryByProduct = Object.values(productMap).sort((a, b) => b.totalValue - a.totalValue).slice(0, 10);
     return { summary, statusData, lowStockItems, inventoryByProduct, isSample: false, isPro: true };
   } catch (err: any) {
-    if (err instanceof Response) return err;
+    if (err instanceof Response) throw err;
     const { getSampleInventoryData } = await import("~/lib/sampleData");
     return { ...getSampleInventoryData(), isSample: true, isPro: true };
   }
