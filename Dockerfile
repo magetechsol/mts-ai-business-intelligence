@@ -1,11 +1,9 @@
 FROM node:20-alpine AS builder
-ARG CACHE_BUST=1
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .
 RUN npx prisma generate
-ENV SHOPIFY_API_KEY=${SHOPIFY_API_KEY}
 RUN npm run build
 
 FROM node:20-alpine
