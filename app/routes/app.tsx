@@ -256,27 +256,38 @@ export function ErrorBoundary() {
   useEffect(() => {
     if (error instanceof Response) {
       error.clone().text().then(setBounceHtml);
+    } else if (isRouteErrorResponse(error)) {
+      if (error.data instanceof Response) {
+        error.data.clone().text().then(setBounceHtml);
+      } else if (typeof error.data === "string") {
+        setBounceHtml(error.data);
+      } else if (error.data?.body) {
+        setBounceHtml(typeof error.data.body === "string" ? error.data.body : String(error.data.body));
+      }
     }
   }, [error]);
 
-  if (error instanceof Response) {
-    if (bounceHtml) {
-      return (
-        <div
-          dangerouslySetInnerHTML={{ __html: bounceHtml }}
-          style={{ width: "100%", height: "100vh" }}
-        />
-      );
-    }
-    return null;
+  if (bounceHtml) {
+    return (
+      <div
+        dangerouslySetInnerHTML={{ __html: bounceHtml }}
+        style={{ width: "100%", height: "100vh" }}
+      />
+    );
   }
 
   if (isRouteErrorResponse(error)) {
     return (
       <div style={{ padding: 40, textAlign: "center", fontFamily: "system-ui, sans-serif" }}>
-        <h1 style={{ fontSize: 24, marginBottom: 8 }}>Error {error.status}</h1>
-        <p style={{ color: "#666", marginBottom: 16 }}>{error.statusText || "Something went wrong"}</p>
-        <Link to="/app" style={{ color: "#2563eb" }}>Return to Dashboard</Link>
+        <h1 style={{ fontSize: 24, marginBottom: 8 }}>Authentication Required</h1>
+        <p style={{ color: "#666", marginBottom: 16 }}>Please open this app from your Shopify Admin to authenticate.</p>
+        <a
+          href="https://admin.shopify.com/store/mts-ai-bi-test/apps"
+          target="_top"
+          style={{ padding: "8px 20px", borderRadius: 8, background: "#2563eb", color: "#fff", textDecoration: "none", fontSize: 14, display: "inline-block" }}
+        >
+          Open in Shopify Admin
+        </a>
       </div>
     );
   }
