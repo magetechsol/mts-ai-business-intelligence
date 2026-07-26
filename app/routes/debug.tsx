@@ -1,11 +1,8 @@
-import type { Route } from "./+types/debug";
 import prisma from "~/db.server";
 
-export async function loader({ request }: Route.LoaderArgs) {
+export async function loader({ request }: { request: Request }) {
   const url = new URL(request.url);
   const ua = request.headers.get("User-Agent") || "none";
-  const authHeader = request.headers.get("Authorization") || "none";
-  const shop = url.searchParams.get("shop") || "none";
 
   const sessions = await prisma.session.findMany({
     select: { id: true, shop: true, isOnline: true, scope: true, createdAt: true, expiresAt: true },
@@ -13,9 +10,9 @@ export async function loader({ request }: Route.LoaderArgs) {
     take: 5,
   });
 
-  const settings = await prisma.appSettings.findFirst({
+  const settings = await prisma.appSettings.findMany({
     select: { id: true, shopId: true, plan: true, billingStatus: true },
-    take: 1,
+    take: 5,
   });
 
   let authResult: any = "not attempted";
@@ -35,13 +32,15 @@ export async function loader({ request }: Route.LoaderArgs) {
     };
   }
 
-  return {
-    request: { ua: ua.substring(0, 200), authHeader: authHeader.substring(0, 50), shop, url: url.pathname + url.search },
+  return new Response(JSON.stringify({
+    request: { ua: ua.substring(0, 200), shop: url.searchParams.get("shop"), url: url.pathname + url.search },
     sessions,
     settings,
     authResult,
     timestamp: new Date().toISOString(),
-  };
+  }, null, 2), {
+    headers: { "Content-Type": "application/json" },
+  });
 }
 
 export default function Debug() {
