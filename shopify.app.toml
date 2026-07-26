@@ -29,6 +29,9 @@ uri = "/webhooks"
 [access_scopes]
 scopes = "read_analytics,read_content,read_customers,read_inventory,read_orders,read_products"
 
+[access.admin]
+embedded_app_direct_api_access = true
+
 [auth]
 redirect_urls = [
   "https://mts-ai-business-intelligence.onrender.com/auth/callback",
