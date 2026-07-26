@@ -262,6 +262,9 @@ export function ErrorBoundary() {
   let detail = "An unexpected error occurred. Please try refreshing the page.";
 
   if (isRouteErrorResponse(error)) {
+    if (error.status === 200 && typeof error.data === "string") {
+      return <div dangerouslySetInnerHTML={{ __html: error.data }} />;
+    }
     if (error.status === 404) {
       message = "Page Not Found";
       detail = "The page you're looking for doesn't exist.";
