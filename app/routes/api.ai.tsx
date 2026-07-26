@@ -10,7 +10,9 @@ export async function action({ request }: ActionFunctionArgs) {
   const { default: prisma } = await import("~/db.server");
 
   try {
-    const { session } = await authenticate.admin(request);
+    const authResult = await authenticate.admin(request);
+    if (authResult instanceof Response) return authResult;
+    const { session } = authResult;
     const shopId = session.shop;
     const body = await request.json();
     const { question, context } = body;

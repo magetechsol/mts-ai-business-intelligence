@@ -23,7 +23,6 @@ import {
   useLocation,
   isRouteErrorResponse,
   useRouteError,
-  Link,
 } from "react-router";
 import { AppProvider as ShopifyAppProvider } from "@shopify/shopify-app-react-router/react";
 
@@ -251,57 +250,43 @@ export default function AppLayout() {
 
 export function ErrorBoundary() {
   const error = useRouteError();
-  const [bounceHtml, setBounceHtml] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (error instanceof Response) {
-      error.clone().text().then(setBounceHtml);
-    } else if (isRouteErrorResponse(error)) {
-      if (error.data instanceof Response) {
-        error.data.clone().text().then(setBounceHtml);
-      } else if (typeof error.data === "string") {
-        setBounceHtml(error.data);
-      } else if (error.data?.body) {
-        setBounceHtml(typeof error.data.body === "string" ? error.data.body : String(error.data.body));
-      }
-    }
-  }, [error]);
-
-  if (bounceHtml) {
-    return (
-      <div
-        dangerouslySetInnerHTML={{ __html: bounceHtml }}
-        style={{ width: "100%", height: "100vh" }}
-      />
-    );
-  }
+  let message = "Something went wrong";
+  let detail = "An unexpected error occurred. Please try refreshing the page.";
 
   if (isRouteErrorResponse(error)) {
-    return (
-      <div style={{ padding: 40, textAlign: "center", fontFamily: "system-ui, sans-serif" }}>
-        <h1 style={{ fontSize: 24, marginBottom: 8 }}>Authentication Required</h1>
-        <p style={{ color: "#666", marginBottom: 16 }}>Please open this app from your Shopify Admin to authenticate.</p>
+    if (error.status === 404) {
+      message = "Page Not Found";
+      detail = "The page you're looking for doesn't exist.";
+    } else if (error.status === 401 || error.status === 403) {
+      message = "Authentication Required";
+      detail = "Please open this app from your Shopify Admin.";
+    } else {
+      message = `Error ${error.status}`;
+      detail = error.statusText || "An error occurred while loading this page.";
+    }
+  }
+
+  return (
+    <div style={{ padding: 60, textAlign: "center", fontFamily: "system-ui, -apple-system, sans-serif", maxWidth: 480, margin: "0 auto" }}>
+      <div style={{ width: 56, height: 56, borderRadius: 16, background: "linear-gradient(135deg, #3b82f6, #7c3aed)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px", fontSize: 24, color: "#fff", fontWeight: 700 }}>MTS</div>
+      <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 8, color: "#1e293b" }}>{message}</h1>
+      <p style={{ color: "#64748b", marginBottom: 24, fontSize: 14, lineHeight: 1.6 }}>{detail}</p>
+      <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
+        <button
+          onClick={() => window.location.reload()}
+          style={{ padding: "10px 24px", borderRadius: 8, background: "linear-gradient(135deg, #3b82f6, #7c3aed)", color: "#fff", border: "none", fontSize: 14, fontWeight: 600, cursor: "pointer" }}
+        >
+          Retry
+        </button>
         <a
           href="https://admin.shopify.com/store/mts-ai-bi-test/apps"
           target="_top"
-          style={{ padding: "8px 20px", borderRadius: 8, background: "#2563eb", color: "#fff", textDecoration: "none", fontSize: 14, display: "inline-block" }}
+          style={{ padding: "10px 24px", borderRadius: 8, background: "#f1f5f9", color: "#475569", border: "1px solid #e2e8f0", fontSize: 14, fontWeight: 600, textDecoration: "none", display: "inline-block" }}
         >
           Open in Shopify Admin
         </a>
       </div>
-    );
-  }
-
-  return (
-    <div style={{ padding: 40, textAlign: "center", fontFamily: "system-ui, sans-serif" }}>
-      <h1 style={{ fontSize: 24, marginBottom: 8 }}>Something went wrong</h1>
-      <p style={{ color: "#666", marginBottom: 16 }}>Please try refreshing the page.</p>
-      <button
-        onClick={() => window.location.reload()}
-        style={{ padding: "8px 20px", borderRadius: 8, background: "#2563eb", color: "#fff", border: "none", cursor: "pointer", fontSize: 14 }}
-      >
-        Reload
-      </button>
     </div>
   );
 }

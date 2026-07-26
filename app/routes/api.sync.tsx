@@ -9,7 +9,9 @@ export async function action({ request }: ActionFunctionArgs) {
   const { syncAllData } = await import("~/lib/sync.server");
 
   try {
-    const { session } = await authenticate.admin(request);
+    const authResult = await authenticate.admin(request);
+    if (authResult instanceof Response) return authResult;
+    const { session } = authResult;
     const shopId = session.shop;
 
     const result = await syncAllData(request, shopId);

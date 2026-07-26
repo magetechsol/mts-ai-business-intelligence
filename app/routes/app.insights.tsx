@@ -21,7 +21,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
   try {
     const { authenticate } = await import("~/shopify.server");
     const { getShopPlan } = await import("~/lib/billing.server");
-    const { session } = await authenticate.admin(request);
+    const authResult = await authenticate.admin(request);
+    if (authResult instanceof Response) return authResult;
+    const { session } = authResult;
     const shopId = session.shop;
     const planInfo = await getShopPlan(shopId);
     if (planInfo.isFree) {
@@ -49,7 +51,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       isSample: false, isPro: true,
     };
   } catch (err: any) {
-    if (err instanceof Response) throw err;
+    if (err instanceof Response) return err;
     const { getSampleAnalytics } = await import("~/lib/sampleData");
     const sampleAnalytics = getSampleAnalytics();
     const { forecastRevenue } = await import("~/lib/forecast.server");
@@ -64,7 +66,9 @@ export async function action({ request }: ActionFunctionArgs) {
     const { getFullAnalytics } = await import("~/lib/analytics.server");
     const { generateAiInsight } = await import("~/lib/ai.server");
     const { default: prisma } = await import("~/db.server");
-    const { session } = await authenticate.admin(request);
+    const authActionResult = await authenticate.admin(request);
+    if (authActionResult instanceof Response) return authActionResult;
+    const { session } = authActionResult;
     const shopId = session.shop;
     const formData = await request.formData();
     const question = formData.get("question") as string;

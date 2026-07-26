@@ -7,7 +7,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
   try {
     const { authenticate } = await import("~/shopify.server");
     const { default: prisma } = await import("~/db.server");
-    const { session } = await authenticate.admin(request);
+    const authResult = await authenticate.admin(request);
+    if (authResult instanceof Response) return authResult;
+    const { session } = authResult;
     const shopId = session.shop;
     const settings = await prisma.appSettings.findUnique({ where: { shopId } });
     return {
@@ -18,7 +20,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       isSample: false,
     };
   } catch (err: any) {
-    if (err instanceof Response) throw err;
+    if (err instanceof Response) return err;
     return { shopId: "demo", shopName: "demo.myshopify.com", openaiKey: "", syncEnabled: true, lastSyncAt: null, isSample: true };
   }
 }
@@ -27,7 +29,9 @@ export async function action({ request }: ActionFunctionArgs) {
   try {
     const { authenticate } = await import("~/shopify.server");
     const { default: prisma } = await import("~/db.server");
-    const { session } = await authenticate.admin(request);
+    const authActionResult = await authenticate.admin(request);
+    if (authActionResult instanceof Response) return authActionResult;
+    const { session } = authActionResult;
     const shopId = session.shop;
     const formData = await request.formData();
     const intent = formData.get("intent") as string;

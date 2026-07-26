@@ -14,7 +14,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
   try {
     const { authenticate } = await import("~/shopify.server");
     const { default: prisma } = await import("~/db.server");
-    const { session } = await authenticate.admin(request);
+    const authResult = await authenticate.admin(request);
+    if (authResult instanceof Response) return authResult;
+    const { session } = authResult;
     const shopId = session.shop;
     const endDate = new Date();
     const startDate = new Date();
@@ -36,7 +38,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       isSample: false,
     };
   } catch (err: any) {
-    if (err instanceof Response) throw err;
+    if (err instanceof Response) return err;
     console.error("[AUTH FAIL]", err?.constructor?.name, err?.status, err?.statusText, err?.message || String(err));
     const { getSampleDashboardData } = await import("~/lib/sampleData");
     return { ...getSampleDashboardData(), isSample: true, authError: err?.message || "Authentication required" };
@@ -56,13 +58,24 @@ export default function Dashboard() {
   const { analytics, recentOrders, isSample, authError } = useLoaderData<typeof loader>();
   const [timeRange, setTimeRange] = useState("30d");
 
+  const safeAnalytics = analytics || {
+    revenue: { label: "Total Revenue", value: "$0", change: 0, changeLabel: "", trend: "neutral" as const },
+    orders: { label: "Total Orders", value: "0", change: 0, changeLabel: "", trend: "neutral" as const },
+    averageOrderValue: { label: "Average Order Value", value: "$0", change: 0, changeLabel: "", trend: "neutral" as const },
+    customers: { label: "New Customers", value: "0", change: 0, changeLabel: "", trend: "neutral" as const },
+    repeatRate: { label: "Repeat Purchase Rate", value: "0%", change: 0, changeLabel: "", trend: "neutral" as const },
+    conversionRate: { label: "Conversion Rate", value: "N/A", change: 0, changeLabel: "", trend: "neutral" as const },
+    salesChart: [],
+    topProducts: [],
+  };
+
   const kpis = [
-    analytics.revenue,
-    analytics.orders,
-    analytics.averageOrderValue,
-    analytics.customers,
-    analytics.repeatRate,
-    analytics.conversionRate,
+    safeAnalytics.revenue,
+    safeAnalytics.orders,
+    safeAnalytics.averageOrderValue,
+    safeAnalytics.customers,
+    safeAnalytics.repeatRate,
+    safeAnalytics.conversionRate,
   ];
 
   const accentClasses = ["", "accent-green", "accent-cool", "accent-warm", "accent-green", "accent-cool"];
@@ -130,7 +143,7 @@ export default function Dashboard() {
           <p className="mts-chart-subtitle">Daily revenue for the last 30 days</p>
           <div className="mts-chart-wrapper" style={{ height: 300 }}>
             <ResponsiveContainer width="100%" height={300}>
-              <AreaChart data={analytics.salesChart} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+              <AreaChart data={safeAnalytics.salesChart} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
                 <defs>
                   <linearGradient id="gradRevenue" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#2563eb" stopOpacity={0.2} />
@@ -156,7 +169,7 @@ export default function Dashboard() {
           <p className="mts-chart-subtitle">Revenue by product</p>
           <div className="mts-chart-wrapper" style={{ height: 300 }}>
             <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={analytics.topProducts.slice(0, 5)} layout="vertical" margin={{ left: 0, right: 10, top: 5, bottom: 5 }}>
+              <BarChart data={safeAnalytics.topProducts.slice(0, 5)} layout="vertical" margin={{ left: 0, right: 10, top: 5, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
                 <XAxis type="number" tick={{ fontSize: 11, fill: "#94a3b8" }} tickFormatter={(v) => `$${v}`} axisLine={false} tickLine={false} />
                 <YAxis type="category" dataKey="title" tick={{ fontSize: 11, fill: "#475569" }} width={90} axisLine={false} tickLine={false} tickFormatter={(v) => v.length > 14 ? v.slice(0, 14) + "..." : v} />

@@ -14,7 +14,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
     const { authenticate } = await import("~/shopify.server");
     const { getRevenueKpi, getOrdersKpi, getAovKpi, getSalesChart } = await import("~/lib/analytics.server");
     const { default: prisma } = await import("~/db.server");
-    const { session } = await authenticate.admin(request);
+    const authResult = await authenticate.admin(request);
+    if (authResult instanceof Response) return authResult;
+    const { session } = authResult;
     const shopId = session.shop;
     const endDate = new Date();
     const startDate = new Date();
@@ -46,7 +48,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       isSample: false,
     };
   } catch (err: any) {
-    if (err instanceof Response) throw err;
+    if (err instanceof Response) return err;
     const { getSampleSalesData } = await import("~/lib/sampleData");
     return { ...getSampleSalesData(), isSample: true };
   }
@@ -54,6 +56,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
 export default function SalesPage() {
   const { revenue, orders, aov, salesChart, statusData, dayOfWeekData, isSample } = useLoaderData<typeof loader>();
+
+  const safeRevenue = revenue || { label: "Total Revenue", value: "$0", change: 0, changeLabel: "", trend: "neutral" as const };
+  const safeOrders = orders || { label: "Total Orders", value: "0", change: 0, changeLabel: "", trend: "neutral" as const };
+  const safeAov = aov || { label: "Avg Order Value", value: "$0", change: 0, changeLabel: "", trend: "neutral" as const };
 
   return (
     <div className="mts-page">
@@ -69,9 +75,9 @@ export default function SalesPage() {
 
       <div className="mts-three-col">
         {[
-          { label: "Total Revenue", value: revenue.value, change: revenue.change, trend: revenue.trend, label2: revenue.changeLabel },
-          { label: "Total Orders", value: orders.value, change: orders.change, trend: orders.trend, label2: orders.changeLabel },
-          { label: "Avg Order Value", value: aov.value, change: aov.change, trend: aov.trend, label2: aov.changeLabel },
+          { label: "Total Revenue", value: safeRevenue.value, change: safeRevenue.change, trend: safeRevenue.trend, label2: safeRevenue.changeLabel },
+          { label: "Total Orders", value: safeOrders.value, change: safeOrders.change, trend: safeOrders.trend, label2: safeOrders.changeLabel },
+          { label: "Avg Order Value", value: safeAov.value, change: safeAov.change, trend: safeAov.trend, label2: safeAov.changeLabel },
         ].map((kpi, i) => (
           <div key={kpi.label} className={`mts-kpi-card ${["", "accent-green", "accent-cool"][i]}`}>
             <div className="mts-kpi-label">{kpi.label}</div>
