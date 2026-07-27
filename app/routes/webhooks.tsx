@@ -1,41 +1,73 @@
 import type { ActionFunctionArgs } from "react-router";
+import crypto from "crypto";
 
 export async function action({ request }: ActionFunctionArgs) {
-  const { authenticate } = await import("~/shopify.server");
-  const { default: prisma } = await import("~/db.server");
+  if (request.method !== "POST") {
+    return new Response("Method not allowed", { status: 405 });
+  }
 
+  const hmacHeader = request.headers.get("X-Shopify-Hmac-Sha256");
   const topicHeader = request.headers.get("X-Shopify-Topic") || "";
+  const shopHeader = request.headers.get("X-Shopify-Shop-Domain") || "";
+
+  if (!hmacHeader) {
+    return new Response("Unauthorized", { status: 401 });
+  }
 
   try {
-    const { session, topic } = await authenticate.webhook(request);
+    const body = await request.text();
+    const secret = process.env.SHOPIFY_API_SECRET || "";
+    const generatedHmac = crypto
+      .createHmac("sha256", secret)
+      .update(body, "utf8")
+      .digest("base64");
 
-    if (!session) {
+    if (generatedHmac !== hmacHeader) {
       return new Response("Unauthorized", { status: 401 });
     }
 
-    const shopId = session.shop;
-    const body = await request.json();
+    const { authenticate } = await import("~/shopify.server");
+    const { default: prisma } = await import("~/db.server");
 
-    if (topic === "shop/redact") {
-      await handleShopRedact(shopId, body, prisma);
-    } else if (topic === "customers/data_request") {
-      await handleCustomerDataRequest(shopId, body);
-    } else if (topic === "customers/redact") {
-      await handleCustomerRedact(shopId, body, prisma);
-    } else if (topic === "app_subscriptions/update") {
-      await handleSubscriptionUpdate(shopId, body, prisma);
-    } else if (topic?.includes("orders/")) {
-      await handleOrderWebhook(shopId, body, topic, prisma);
-    } else if (topic?.includes("products/")) {
-      await handleProductWebhook(shopId, body, topic, prisma);
-    } else if (topic?.includes("customers/")) {
-      await handleCustomerWebhook(shopId, body, topic, prisma);
+    let session: any = null;
+    try {
+      const authResult = await authenticate.webhook(request);
+      session = authResult.session;
+    } catch {
+      session = null;
+    }
+
+    if (!session && shopHeader) {
+      session = await prisma.session.findFirst({ where: { shop: shopHeader } });
+    }
+
+    if (!session) {
+      return new Response("OK", { status: 200 });
+    }
+
+    const shopId = session.shop;
+    const bodyJson = JSON.parse(body);
+
+    if (topicHeader === "shop/redact") {
+      await handleShopRedact(shopId, bodyJson, prisma);
+    } else if (topicHeader === "customers/data_request") {
+      await handleCustomerDataRequest(shopId, bodyJson);
+    } else if (topicHeader === "customers/redact") {
+      await handleCustomerRedact(shopId, bodyJson, prisma);
+    } else if (topicHeader === "app_subscriptions/update") {
+      await handleSubscriptionUpdate(shopId, bodyJson, prisma);
+    } else if (topicHeader.includes("orders/")) {
+      await handleOrderWebhook(shopId, bodyJson, topicHeader, prisma);
+    } else if (topicHeader.includes("products/")) {
+      await handleProductWebhook(shopId, bodyJson, topicHeader, prisma);
+    } else if (topicHeader.includes("customers/")) {
+      await handleCustomerWebhook(shopId, bodyJson, topicHeader, prisma);
     }
 
     return new Response("OK", { status: 200 });
   } catch (error: any) {
     console.error("Webhook error:", error?.message || error);
-    return new Response("Error", { status: 500 });
+    return new Response("OK", { status: 200 });
   }
 }
 
@@ -43,10 +75,14 @@ async function handleShopRedact(shopId: string, body: any, prisma: any) {
   try {
     await prisma.aiInsight.deleteMany({ where: { shopId } });
     await prisma.appSettings.deleteMany({ where: { shopId } });
+    await prisma.syncedOrderItem.deleteMany({
+      where: { orderId: { in: (await prisma.syncedOrder.findMany({ where: { shopId }, select: { id: true } })).map((o: any) => o.id) } },
+    });
     await prisma.syncedOrder.deleteMany({ where: { shopId } });
-    await prisma.syncedOrderItem.deleteMany({ where: { orderId: { in: (await prisma.syncedOrder.findMany({ where: { shopId }, select: { id: true } })).map((o: any) => o.id) } } });
+    await prisma.syncedProductVariant.deleteMany({
+      where: { productId: { in: (await prisma.syncedProduct.findMany({ where: { shopId }, select: { id: true } })).map((p: any) => p.id) } },
+    });
     await prisma.syncedProduct.deleteMany({ where: { shopId } });
-    await prisma.syncedProductVariant.deleteMany({ where: { productId: { in: (await prisma.syncedProduct.findMany({ where: { shopId }, select: { id: true } })).map((p: any) => p.id) } } });
     await prisma.syncedCustomer.deleteMany({ where: { shopId } });
     await prisma.session.deleteMany({ where: { shop: shopId } });
     console.log(`[GDPR] Shop data redacted: ${shopId}`);
