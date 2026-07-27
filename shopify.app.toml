@@ -26,6 +26,11 @@ uri = "/webhooks"
 topics = ["app_subscriptions/update"]
 uri = "/webhooks"
 
+[[webhooks.subscriptions]]
+topics = ["app/uninstalled"]
+compliance_topics = ["customers/data_request", "customers/redact", "shop/redact"]
+uri = "/webhooks"
+
 [access_scopes]
 scopes = "read_analytics,read_content,read_customers,read_inventory,read_orders,read_products"
 
@@ -38,8 +43,3 @@ redirect_urls = [
   "https://mts-ai-business-intelligence.onrender.com/auth/shopify/callback",
   "https://mts-ai-business-intelligence.onrender.com/api/auth/callback"
 ]
-
-[app_proxy]
-url = "https://mts-ai-business-intelligence.onrender.com/api/proxy"
-subpath = "apps"
-prefix = "apps"

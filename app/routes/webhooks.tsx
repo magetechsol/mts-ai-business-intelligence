@@ -6,21 +6,9 @@ export async function action({ request }: ActionFunctionArgs) {
 
   const topicHeader = request.headers.get("X-Shopify-Topic") || "";
 
-  if (topicHeader === "shop/redact") {
-    return handleShopRedact(request, prisma);
-  }
-  if (topicHeader === "customers/data_request") {
-    return handleCustomerDataRequest(request);
-  }
-  if (topicHeader === "customers/redact") {
-    return handleCustomerRedact(request, prisma);
-  }
-  if (topicHeader === "app_subscriptions/update") {
-    return handleSubscriptionUpdate(request, prisma);
-  }
-
   try {
     const { session, topic } = await authenticate.webhook(request);
+
     if (!session) {
       return new Response("Unauthorized", { status: 401 });
     }
@@ -28,92 +16,87 @@ export async function action({ request }: ActionFunctionArgs) {
     const shopId = session.shop;
     const body = await request.json();
 
-    if (topicHeader.includes("orders/")) {
-      await handleOrderWebhook(shopId, body, topicHeader, prisma);
-    } else if (topicHeader.includes("products/")) {
-      await handleProductWebhook(shopId, body, topicHeader, prisma);
-    } else if (topicHeader.includes("customers/")) {
-      await handleCustomerWebhook(shopId, body, topicHeader, prisma);
+    if (topic === "shop/redact") {
+      await handleShopRedact(shopId, body, prisma);
+    } else if (topic === "customers/data_request") {
+      await handleCustomerDataRequest(shopId, body);
+    } else if (topic === "customers/redact") {
+      await handleCustomerRedact(shopId, body, prisma);
+    } else if (topic === "app_subscriptions/update") {
+      await handleSubscriptionUpdate(shopId, body, prisma);
+    } else if (topic?.includes("orders/")) {
+      await handleOrderWebhook(shopId, body, topic, prisma);
+    } else if (topic?.includes("products/")) {
+      await handleProductWebhook(shopId, body, topic, prisma);
+    } else if (topic?.includes("customers/")) {
+      await handleCustomerWebhook(shopId, body, topic, prisma);
     }
 
     return new Response("OK", { status: 200 });
-  } catch (error) {
-    console.error("Webhook error:", error);
+  } catch (error: any) {
+    console.error("Webhook error:", error?.message || error);
     return new Response("Error", { status: 500 });
   }
 }
 
-async function handleShopRedact(request: Request, prisma: any) {
+async function handleShopRedact(shopId: string, body: any, prisma: any) {
   try {
-    const body = await request.json();
-    const shopDomain = body.shop_domain;
-    if (shopDomain) {
-      await prisma.aiInsight.deleteMany({ where: { shopId: shopDomain } });
-      await prisma.appSettings.deleteMany({ where: { shopId: shopDomain } });
-      await prisma.syncedOrder.deleteMany({ where: { shopId: shopDomain } });
-      await prisma.syncedProduct.deleteMany({ where: { shopId: shopDomain } });
-      await prisma.syncedCustomer.deleteMany({ where: { shopId: shopDomain } });
-      await prisma.session.deleteMany({ where: { shop: shopDomain } });
-      console.log(`[GDPR] Shop data redacted: ${shopDomain}`);
-    }
-    return new Response("OK", { status: 200 });
+    await prisma.aiInsight.deleteMany({ where: { shopId } });
+    await prisma.appSettings.deleteMany({ where: { shopId } });
+    await prisma.syncedOrder.deleteMany({ where: { shopId } });
+    await prisma.syncedOrderItem.deleteMany({ where: { orderId: { in: (await prisma.syncedOrder.findMany({ where: { shopId }, select: { id: true } })).map((o: any) => o.id) } } });
+    await prisma.syncedProduct.deleteMany({ where: { shopId } });
+    await prisma.syncedProductVariant.deleteMany({ where: { productId: { in: (await prisma.syncedProduct.findMany({ where: { shopId }, select: { id: true } })).map((p: any) => p.id) } } });
+    await prisma.syncedCustomer.deleteMany({ where: { shopId } });
+    await prisma.session.deleteMany({ where: { shop: shopId } });
+    console.log(`[GDPR] Shop data redacted: ${shopId}`);
   } catch (error) {
     console.error("[GDPR] Shop redact error:", error);
-    return new Response("OK", { status: 200 });
   }
 }
 
-async function handleCustomerDataRequest(request: Request) {
+async function handleCustomerDataRequest(shopId: string, body: any) {
   try {
-    const body = await request.json();
     const { customer } = body;
     if (customer?.email) {
-      console.log(`[GDPR] Customer data request: ${customer.email} from ${body.shop_domain}`);
+      console.log(`[GDPR] Customer data request: ${customer.email} from ${shopId}`);
     }
-    return new Response("OK", { status: 200 });
-  } catch {
-    return new Response("OK", { status: 200 });
+  } catch (error) {
+    console.error("[GDPR] Customer data request error:", error);
   }
 }
 
-async function handleCustomerRedact(request: Request, prisma: any) {
+async function handleCustomerRedact(shopId: string, body: any, prisma: any) {
   try {
-    const body = await request.json();
     const { customer } = body;
-    if (customer?.email) {
-      await prisma.syncedCustomer.deleteMany({
-        where: { email: customer.email, shopId: body.shop_domain },
-      });
-      console.log(`[GDPR] Customer data redacted: ${customer.email}`);
+    if (customer?.id) {
+      const customerId = String(customer.id);
+      await prisma.syncedOrder.deleteMany({ where: { customerEmail: customer.email, shopId } });
+      await prisma.syncedCustomer.deleteMany({ where: { id: customerId, shopId } });
     }
-    return new Response("OK", { status: 200 });
-  } catch {
-    return new Response("OK", { status: 200 });
+    if (customer?.email) {
+      await prisma.syncedCustomer.deleteMany({ where: { email: customer.email, shopId } });
+    }
+    console.log(`[GDPR] Customer data redacted from ${shopId}`);
+  } catch (error) {
+    console.error("[GDPR] Customer redact error:", error);
   }
 }
 
-async function handleSubscriptionUpdate(request: Request, prisma: any) {
+async function handleSubscriptionUpdate(shopId: string, body: any, prisma: any) {
   try {
-    const body = await request.json();
-    const shopDomain = body.shop_domain;
     const subscription = body.app_subscription;
-
-    if (shopDomain && subscription) {
-      const isActive = subscription.status === "active";
+    if (subscription) {
       const planName = subscription.name || "free";
-
-      console.log(`[Billing] Subscription updated: ${shopDomain} -> ${planName} (${subscription.status})`);
-
+      console.log(`[Billing] Subscription updated: ${shopId} -> ${planName} (${subscription.status})`);
       await prisma.appSettings.upsert({
-        where: { shopId: shopDomain },
+        where: { shopId },
         update: { plan: planName, billingStatus: subscription.status },
-        create: { shopId: shopDomain, plan: planName, billingStatus: subscription.status },
+        create: { shopId, plan: planName, billingStatus: subscription.status },
       });
     }
-    return new Response("OK", { status: 200 });
   } catch (error) {
     console.error("[Billing] Subscription update error:", error);
-    return new Response("OK", { status: 200 });
   }
 }
 
@@ -174,6 +157,7 @@ async function handleProductWebhook(shopId: string, body: any, topic: string, pr
   const productId = String(product.id);
 
   if (topic.includes("delete")) {
+    await prisma.syncedProductVariant.deleteMany({ where: { productId } });
     await prisma.syncedProduct.deleteMany({ where: { id: productId, shopId } });
     return;
   }
