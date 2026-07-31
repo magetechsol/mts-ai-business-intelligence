@@ -5,15 +5,14 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
+import { authenticate } from "~/shopify.server";
+import prisma from "~/db.server";
+import { getShopPlan } from "~/lib/billing.server";
+import { getSampleProductsData } from "~/lib/sampleData";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   try {
-    const { authenticate } = await import("~/shopify.server");
-    const { getShopPlan } = await import("~/lib/billing.server");
-    const { default: prisma } = await import("~/db.server");
-    const authResult = await authenticate.admin(request);
-    if (authResult instanceof Response) throw authResult;
-    const { session } = authResult;
+    const { session } = await authenticate.admin(request);
     const shopId = session.shop;
     const planInfo = await getShopPlan(shopId);
     if (planInfo.isFree) {
@@ -40,7 +39,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
     };
   } catch (err: any) {
     if (err instanceof Response) throw err;
-    const { getSampleProductsData } = await import("~/lib/sampleData");
     return { ...getSampleProductsData(), isSample: true, isPro: true };
   }
 }

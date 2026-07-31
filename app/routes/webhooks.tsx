@@ -1,5 +1,7 @@
 import type { ActionFunctionArgs } from "react-router";
 import crypto from "crypto";
+import { authenticate } from "~/shopify.server";
+import prisma from "~/db.server";
 
 export async function action({ request }: ActionFunctionArgs) {
   if (request.method !== "POST") {
@@ -25,9 +27,6 @@ export async function action({ request }: ActionFunctionArgs) {
     if (generatedHmac !== hmacHeader) {
       return new Response("Unauthorized", { status: 401 });
     }
-
-    const { authenticate } = await import("~/shopify.server");
-    const { default: prisma } = await import("~/db.server");
 
     let session: any = null;
     try {

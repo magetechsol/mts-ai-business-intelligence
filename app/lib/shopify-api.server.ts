@@ -1,5 +1,3 @@
-import { authenticate } from "~/shopify.server";
-
 const ORDERS_QUERY = `
   query GetOrders($first: Int!, $after: String, $query: String) {
     orders(first: $first, after: $after, query: $query, sortKey: PROCESSED_AT, reverse: true) {
@@ -153,8 +151,7 @@ async function fetchAllPages(admin: any, query: string, variables: Record<string
   return allEdges;
 }
 
-export async function fetchOrders(httpRequest: any, startDate: Date, endDate: Date, shopId: string) {
-  const { admin } = await authenticate.admin(httpRequest);
+export async function fetchOrders(admin: any, startDate: Date, endDate: Date, shopId: string) {
   const query = `processed_at:>=${startDate.toISOString()} processed_at:<${endDate.toISOString()}`;
   const edges = await fetchAllPages(admin, ORDERS_QUERY, { first: 250, query }, 20);
 
@@ -190,8 +187,7 @@ export async function fetchOrders(httpRequest: any, startDate: Date, endDate: Da
   });
 }
 
-export async function fetchProducts(request: any, shopId: string) {
-  const { admin } = await authenticate.admin(request);
+export async function fetchProducts(admin: any, shopId: string) {
   const edges = await fetchAllPages(admin, PRODUCTS_QUERY, { first: 250 }, 10);
 
   return edges.map((edge: any) => {
@@ -219,8 +215,7 @@ export async function fetchProducts(request: any, shopId: string) {
   });
 }
 
-export async function fetchCustomers(request: any, shopId: string) {
-  const { admin } = await authenticate.admin(request);
+export async function fetchCustomers(admin: any, shopId: string) {
   const edges = await fetchAllPages(admin, CUSTOMERS_QUERY, { first: 250 }, 10);
 
   return edges.map((edge: any) => {

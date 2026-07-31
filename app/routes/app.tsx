@@ -118,17 +118,8 @@ export default function AppLayout() {
   };
 
   const handleSync = async () => {
-    try {
-      const res = await fetch("/api/sync", { method: "POST" });
-      if (res.ok) {
-        const data = await res.json();
-        showToast(`Synced ${data.orders} orders, ${data.products} products, ${data.customers} customers`);
-      } else {
-        showToast("Sync failed. Please try again.");
-      }
-    } catch {
-      showToast("Sync failed. Please try again.");
-    }
+    showToast("Redirecting to Settings to sync data...");
+    navigate("/app/settings");
   };
 
   const currentPath = location.pathname;

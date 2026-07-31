@@ -6,22 +6,21 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   BarChart, Bar,
 } from "recharts";
+import { authenticate } from "~/shopify.server";
+import prisma from "~/db.server";
+import { getFullAnalytics } from "~/lib/analytics.server";
+import { getSampleDashboardData } from "~/lib/sampleData";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const ua = request.headers.get("User-Agent") || "none";
   const url = request.url;
   console.log(`[AUTH DEBUG] UA: ${ua.substring(0, 200)} | URL: ${url.substring(0, 200)}`);
   try {
-    const { authenticate } = await import("~/shopify.server");
-    const { default: prisma } = await import("~/db.server");
-    const authResult = await authenticate.admin(request);
-    if (authResult instanceof Response) throw authResult;
-    const { session } = authResult;
+    const { session } = await authenticate.admin(request);
     const shopId = session.shop;
     const endDate = new Date();
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - 30);
-    const { getFullAnalytics } = await import("~/lib/analytics.server");
     const analytics = await getFullAnalytics(shopId, { startDate, endDate, label: "Last 30 Days" });
     const orders = await prisma.syncedOrder.findMany({
       where: { shopId, processedAt: { not: null } },
@@ -40,7 +39,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
   } catch (err: any) {
     if (err instanceof Response) throw err;
     console.error("[AUTH FAIL]", err?.constructor?.name, err?.status, err?.statusText, err?.message || String(err));
-    const { getSampleDashboardData } = await import("~/lib/sampleData");
     return { ...getSampleDashboardData(), isSample: true, authError: err?.message || "Authentication required" };
   }
 }

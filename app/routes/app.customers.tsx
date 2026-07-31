@@ -6,23 +6,22 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, BarChart, Bar,
 } from "recharts";
+import { authenticate } from "~/shopify.server";
+import prisma from "~/db.server";
+import { getShopPlan } from "~/lib/billing.server";
+import { getCustomerMetrics } from "~/lib/analytics.server";
+import { getSampleCustomersData } from "~/lib/sampleData";
 
 const COLORS = ["#2563eb", "#059669", "#d97706", "#dc2626", "#7c3aed"];
 
 export async function loader({ request }: LoaderFunctionArgs) {
   try {
-    const { authenticate } = await import("~/shopify.server");
-    const { getShopPlan } = await import("~/lib/billing.server");
-    const { default: prisma } = await import("~/db.server");
-    const authResult = await authenticate.admin(request);
-    if (authResult instanceof Response) throw authResult;
-    const { session } = authResult;
+    const { session } = await authenticate.admin(request);
     const shopId = session.shop;
     const planInfo = await getShopPlan(shopId);
     if (planInfo.isFree) {
       return { metrics: { totalCustomers: 0, newCustomers: 0, returningCustomers: 0, repeatPurchaseRate: 0, averageLifetimeValue: 0, topCustomers: [] }, monthlyData: [], customerSegments: [], spendRanges: [], customerOrders: {}, isSample: false, isPro: false };
     }
-    const { getCustomerMetrics } = await import("~/lib/analytics.server");
     const endDate = new Date();
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - 30);
@@ -58,7 +57,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
     };
   } catch (err: any) {
     if (err instanceof Response) throw err;
-    const { getSampleCustomersData } = await import("~/lib/sampleData");
     return { ...getSampleCustomersData(), isSample: true, isPro: true };
   }
 }

@@ -1,6 +1,8 @@
 import { useLoaderData, useActionData, Form } from "react-router";
 import type { HeadersFunction, LoaderFunctionArgs, ActionFunctionArgs } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
+import { authenticate, shopify } from "~/shopify.server";
+import prisma from "~/db.server";
 
 const FREE_FEATURES = ["Dashboard Overview", "Basic Sales Analytics", "Settings & Data Sync"];
 const PRO_FEATURES = [
@@ -13,40 +15,53 @@ const PRO_FEATURES = [
 ];
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  try {
-    const { authenticate } = await import("~/shopify.server");
-    const { default: prisma } = await import("~/db.server");
-    const { session } = await authenticate.admin(request);
-    const settings = await prisma.appSettings.findUnique({ where: { shopId: session.shop } });
-    const currentPlan = settings?.plan || "free";
+  const { session } = await authenticate.admin(request);
+  const shopId = session.shop;
 
-    return {
-      currentPlan,
-      billingStatus: settings?.billingStatus || "active",
-    };
-  } catch {
-    return {
-      currentPlan: "free",
-      billingStatus: "active",
-    };
+  const billingData = await shopify.billing.check({
+    request,
+    plans: ["pro_monthly"],
+    isTest: false,
+  });
+
+  const hasActiveSubscription = billingData.hasActivePayment;
+
+  if (hasActiveSubscription) {
+    await prisma.appSettings.upsert({
+      where: { shopId },
+      update: { plan: "pro_monthly", billingStatus: "active" },
+      create: { shopId, plan: "pro_monthly", billingStatus: "active" },
+    });
+  } else {
+    const settings = await prisma.appSettings.findUnique({ where: { shopId } });
+    if (settings?.plan === "pro_monthly") {
+      await prisma.appSettings.upsert({
+        where: { shopId },
+        update: { plan: "free", billingStatus: "inactive" },
+        create: { shopId, plan: "free", billingStatus: "inactive" },
+      });
+    }
   }
+
+  const settings = await prisma.appSettings.findUnique({ where: { shopId } });
+  const currentPlan = settings?.plan || "free";
+
+  return {
+    currentPlan,
+    billingStatus: settings?.billingStatus || "active",
+  };
 }
 
 export async function action({ request }: ActionFunctionArgs) {
-  try {
-    const { authenticate } = await import("~/shopify.server");
-    const { billing } = await authenticate.admin(request);
+  const { billing } = await authenticate.admin(request);
 
-    const result = await billing.request({
-      plan: "pro_monthly",
-      isTest: true,
-      returnTo: `/app/pricing`,
-    });
+  const result = await billing.request({
+    plan: "pro_monthly",
+    isTest: false,
+    returnTo: `/app/pricing`,
+  });
 
-    return result;
-  } catch (e: any) {
-    return { error: e?.message || "Failed to start billing. Please try again." };
-  }
+  return result;
 }
 
 export default function PricingPage() {

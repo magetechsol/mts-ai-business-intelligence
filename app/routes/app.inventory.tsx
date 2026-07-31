@@ -6,6 +6,10 @@ import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
 } from "recharts";
+import { authenticate } from "~/shopify.server";
+import { getShopPlan } from "~/lib/billing.server";
+import { getInventoryItems } from "~/lib/analytics.server";
+import { getSampleInventoryData } from "~/lib/sampleData";
 
 const STATUS_COLORS: Record<string, string> = {
   in_stock: "#059669",
@@ -15,17 +19,12 @@ const STATUS_COLORS: Record<string, string> = {
 
 export async function loader({ request }: LoaderFunctionArgs) {
   try {
-    const { authenticate } = await import("~/shopify.server");
-    const { getShopPlan } = await import("~/lib/billing.server");
-    const authResult = await authenticate.admin(request);
-    if (authResult instanceof Response) throw authResult;
-    const { session } = authResult;
+    const { session } = await authenticate.admin(request);
     const shopId = session.shop;
     const planInfo = await getShopPlan(shopId);
     if (planInfo.isFree) {
       return { summary: { total: 0, inStock: 0, lowStock: 0, outOfStock: 0, totalUnits: 0, totalValue: 0 }, statusData: [], lowStockItems: [], inventoryByProduct: [], isSample: false, isPro: false };
     }
-    const { getInventoryItems } = await import("~/lib/analytics.server");
     const items = await getInventoryItems(shopId);
     const summary = {
       total: items.length,
@@ -54,7 +53,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
     return { summary, statusData, lowStockItems, inventoryByProduct, isSample: false, isPro: true };
   } catch (err: any) {
     if (err instanceof Response) throw err;
-    const { getSampleInventoryData } = await import("~/lib/sampleData");
     return { ...getSampleInventoryData(), isSample: true, isPro: true };
   }
 }

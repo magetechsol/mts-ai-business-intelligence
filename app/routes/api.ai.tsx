@@ -1,18 +1,15 @@
 import type { ActionFunctionArgs } from "react-router";
+import { authenticate } from "~/shopify.server";
+import prisma from "~/db.server";
+import { generateAiInsight } from "~/lib/ai.server";
 
 export async function action({ request }: ActionFunctionArgs) {
   if (request.method !== "POST") {
     return new Response("Method not allowed", { status: 405 });
   }
 
-  const { authenticate } = await import("~/shopify.server");
-  const { generateAiInsight } = await import("~/lib/ai.server");
-  const { default: prisma } = await import("~/db.server");
-
   try {
-    const authResult = await authenticate.admin(request);
-    if (authResult instanceof Response) return authResult;
-    const { session } = authResult;
+    const { session } = await authenticate.admin(request);
     const shopId = session.shop;
     const body = await request.json();
     const { question, context } = body;

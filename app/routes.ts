@@ -16,7 +16,6 @@ export default [
   ]),
   route("api/sync", "routes/api.sync.tsx"),
   route("api/ai", "routes/api.ai.tsx"),
-  route("debug", "routes/debug.tsx"),
   route("webhooks", "routes/webhooks.tsx"),
   route("privacy", "routes/privacy.tsx"),
   route("terms", "routes/terms.tsx"),

@@ -6,17 +6,16 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   BarChart, Bar, PieChart, Pie, Cell,
 } from "recharts";
+import { authenticate } from "~/shopify.server";
+import prisma from "~/db.server";
+import { getRevenueKpi, getOrdersKpi, getAovKpi, getSalesChart } from "~/lib/analytics.server";
+import { getSampleSalesData } from "~/lib/sampleData";
 
 const COLORS = ["#2563eb", "#059669", "#d97706", "#dc2626", "#7c3aed"];
 
 export async function loader({ request }: LoaderFunctionArgs) {
   try {
-    const { authenticate } = await import("~/shopify.server");
-    const { getRevenueKpi, getOrdersKpi, getAovKpi, getSalesChart } = await import("~/lib/analytics.server");
-    const { default: prisma } = await import("~/db.server");
-    const authResult = await authenticate.admin(request);
-    if (authResult instanceof Response) throw authResult;
-    const { session } = authResult;
+    const { session } = await authenticate.admin(request);
     const shopId = session.shop;
     const endDate = new Date();
     const startDate = new Date();
@@ -49,7 +48,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
     };
   } catch (err: any) {
     if (err instanceof Response) throw err;
-    const { getSampleSalesData } = await import("~/lib/sampleData");
     return { ...getSampleSalesData(), isSample: true };
   }
 }

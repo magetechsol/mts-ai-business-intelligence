@@ -5,6 +5,13 @@ import { useState, useRef, useEffect } from "react";
 import { useLoaderData, useFetcher } from "react-router";
 import type { HeadersFunction, LoaderFunctionArgs, ActionFunctionArgs } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
+import { authenticate } from "~/shopify.server";
+import prisma from "~/db.server";
+import { getShopPlan } from "~/lib/billing.server";
+import { getFullAnalytics } from "~/lib/analytics.server";
+import { forecastRevenue } from "~/lib/forecast.server";
+import { generateAiInsight } from "~/lib/ai.server";
+import { getSampleAnalytics } from "~/lib/sampleData";
 
 const SUGGESTED_QUESTIONS = [
   "Which products generated the most revenue this month?",
@@ -19,19 +26,12 @@ const SUGGESTED_QUESTIONS = [
 
 export async function loader({ request }: LoaderFunctionArgs) {
   try {
-    const { authenticate } = await import("~/shopify.server");
-    const { getShopPlan } = await import("~/lib/billing.server");
-    const authResult = await authenticate.admin(request);
-    if (authResult instanceof Response) throw authResult;
-    const { session } = authResult;
+    const { session } = await authenticate.admin(request);
     const shopId = session.shop;
     const planInfo = await getShopPlan(shopId);
     if (planInfo.isFree) {
       return { analytics: null, forecast: [], insights: [], dailyBrief: null, hasOpenAiKey: false, isSample: false, isPro: false };
     }
-    const { getFullAnalytics } = await import("~/lib/analytics.server");
-    const { forecastRevenue } = await import("~/lib/forecast.server");
-    const { default: prisma } = await import("~/db.server");
     const endDate = new Date();
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - 30);
@@ -52,9 +52,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     };
   } catch (err: any) {
     if (err instanceof Response) throw err;
-    const { getSampleAnalytics } = await import("~/lib/sampleData");
     const sampleAnalytics = getSampleAnalytics();
-    const { forecastRevenue } = await import("~/lib/forecast.server");
     const forecast = forecastRevenue(sampleAnalytics.salesChart, 30);
     return { analytics: sampleAnalytics, forecast, insights: [], dailyBrief: null, hasOpenAiKey: false, isSample: true, isPro: true };
   }
@@ -62,13 +60,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
 export async function action({ request }: ActionFunctionArgs) {
   try {
-    const { authenticate } = await import("~/shopify.server");
-    const { getFullAnalytics } = await import("~/lib/analytics.server");
-    const { generateAiInsight } = await import("~/lib/ai.server");
-    const { default: prisma } = await import("~/db.server");
-    const authActionResult = await authenticate.admin(request);
-    if (authActionResult instanceof Response) return authActionResult;
-    const { session } = authActionResult;
+    const { session } = await authenticate.admin(request);
     const shopId = session.shop;
     const formData = await request.formData();
     const question = formData.get("question") as string;

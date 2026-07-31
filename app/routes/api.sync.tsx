@@ -1,20 +1,17 @@
 import type { ActionFunctionArgs } from "react-router";
+import { authenticate } from "~/shopify.server";
+import { syncAllData } from "~/lib/sync.server";
 
 export async function action({ request }: ActionFunctionArgs) {
   if (request.method !== "POST") {
     return new Response("Method not allowed", { status: 405 });
   }
 
-  const { authenticate } = await import("~/shopify.server");
-  const { syncAllData } = await import("~/lib/sync.server");
-
   try {
-    const authResult = await authenticate.admin(request);
-    if (authResult instanceof Response) return authResult;
-    const { session } = authResult;
+    const { session, admin } = await authenticate.admin(request);
     const shopId = session.shop;
 
-    const result = await syncAllData(request, shopId);
+    const result = await syncAllData(admin, shopId);
 
     return new Response(JSON.stringify(result), {
       status: 200,

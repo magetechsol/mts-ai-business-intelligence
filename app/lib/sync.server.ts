@@ -1,23 +1,14 @@
 import prisma from "../db.server";
 import { fetchOrders, fetchProducts, fetchCustomers } from "./shopify-api.server";
 
-export async function syncAllData(request: any, shopId: string) {
+export async function syncAllData(admin: any, shopId: string) {
   const now = new Date();
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
   const [ordersData, productsData, customersData] = await Promise.all([
-    fetchOrders(request, thirtyDaysAgo, now, shopId).catch((e) => {
-      console.error("Failed to fetch orders:", e);
-      return [];
-    }),
-    fetchProducts(request, shopId).catch((e) => {
-      console.error("Failed to fetch products:", e);
-      return [];
-    }),
-    fetchCustomers(request, shopId).catch((e) => {
-      console.error("Failed to fetch customers:", e);
-      return [];
-    }),
+    fetchOrders(admin, thirtyDaysAgo, now, shopId),
+    fetchProducts(admin, shopId),
+    fetchCustomers(admin, shopId),
   ]);
 
   await Promise.all([

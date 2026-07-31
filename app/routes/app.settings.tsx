@@ -2,36 +2,26 @@ import { useState } from "react";
 import { useLoaderData, useFetcher } from "react-router";
 import type { HeadersFunction, LoaderFunctionArgs, ActionFunctionArgs } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
+import { authenticate } from "~/shopify.server";
+import prisma from "~/db.server";
+import { syncAllData } from "~/lib/sync.server";
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  try {
-    const { authenticate } = await import("~/shopify.server");
-    const { default: prisma } = await import("~/db.server");
-    const authResult = await authenticate.admin(request);
-    if (authResult instanceof Response) throw authResult;
-    const { session } = authResult;
-    const shopId = session.shop;
-    const settings = await prisma.appSettings.findUnique({ where: { shopId } });
-    return {
-      shopId, shopName: session.shop,
-      openaiKey: settings?.openaiKey || "",
-      syncEnabled: settings?.syncEnabled ?? true,
-      lastSyncAt: settings?.lastSyncAt?.toISOString() || null,
-      isSample: false,
-    };
-  } catch (err: any) {
-    if (err instanceof Response) throw err;
-    return { shopId: "demo", shopName: "demo.myshopify.com", openaiKey: "", syncEnabled: true, lastSyncAt: null, isSample: true };
-  }
+  const { session } = await authenticate.admin(request);
+  const shopId = session.shop;
+  const settings = await prisma.appSettings.findUnique({ where: { shopId } });
+  return {
+    shopId, shopName: session.shop,
+    openaiKey: settings?.openaiKey || "",
+    syncEnabled: settings?.syncEnabled ?? true,
+    lastSyncAt: settings?.lastSyncAt?.toISOString() || null,
+    isSample: false,
+  };
 }
 
 export async function action({ request }: ActionFunctionArgs) {
   try {
-    const { authenticate } = await import("~/shopify.server");
-    const { default: prisma } = await import("~/db.server");
-    const authActionResult = await authenticate.admin(request);
-    if (authActionResult instanceof Response) return authActionResult;
-    const { session } = authActionResult;
+    const { session, admin } = await authenticate.admin(request);
     const shopId = session.shop;
     const formData = await request.formData();
     const intent = formData.get("intent") as string;
@@ -45,8 +35,7 @@ export async function action({ request }: ActionFunctionArgs) {
       return { success: true, message: "Settings saved" };
     }
     if (intent === "sync") {
-      const { syncAllData } = await import("~/lib/sync.server");
-      const result = await syncAllData(request, shopId);
+      const result = await syncAllData(admin, shopId);
       return { success: true, message: `Synced ${result.orders} orders, ${result.products} products, ${result.customers} customers` };
     }
     return { error: "Unknown action" };
