@@ -71,4 +71,4 @@ if (process.env.NODE_ENV !== "production") {
   app = createApp();
 }
 
-export const { authenticate, shopify } = app;
+export const { authenticate } = app;

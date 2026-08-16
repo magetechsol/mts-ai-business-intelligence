@@ -1,7 +1,7 @@
 import { useLoaderData, useActionData, Form } from "react-router";
 import type { HeadersFunction, LoaderFunctionArgs, ActionFunctionArgs } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
-import { authenticate, shopify } from "~/shopify.server";
+import { authenticate } from "~/shopify.server";
 import prisma from "~/db.server";
 
 const FREE_FEATURES = ["Dashboard Overview", "Basic Sales Analytics", "Settings & Data Sync"];
@@ -15,10 +15,10 @@ const PRO_FEATURES = [
 ];
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  const { session } = await authenticate.admin(request);
+  const { session, billing } = await authenticate.admin(request);
   const shopId = session.shop;
 
-  const billingData = await shopify.billing.check({
+  const billingData = await billing.check({
     request,
     plans: ["pro_monthly"],
     isTest: false,

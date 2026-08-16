@@ -3,6 +3,7 @@ name = "MTS AI Business Intelligence"
 handle = "mts-ai-business-intelligence"
 application_url = "https://mts-ai-business-intelligence.onrender.com"
 embedded = true
+description = "Track your store's revenue, orders, products, and customers with AI-powered analytics and insights."
 
 [build]
 automatically_update_urls_on_dev = true
