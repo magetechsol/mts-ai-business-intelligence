@@ -1,21 +1,74 @@
 import prisma from "../db.server";
 import { fetchOrders, fetchProducts, fetchCustomers } from "./shopify-api.server";
 
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
 export async function syncAllData(admin: any, shopId: string) {
   const now = new Date();
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
-  const [ordersData, productsData, customersData] = await Promise.all([
-    fetchOrders(admin, thirtyDaysAgo, now, shopId),
-    fetchProducts(admin, shopId),
-    fetchCustomers(admin, shopId),
-  ]);
+  const errors: string[] = [];
+  let ordersData: any[] = [];
+  let productsData: any[] = [];
+  let customersData: any[] = [];
 
-  await Promise.all([
-    syncOrders(ordersData, shopId),
-    syncProducts(productsData, shopId),
-    syncCustomers(customersData, shopId),
-  ]);
+  try {
+    ordersData = await fetchOrders(admin, thirtyDaysAgo, now, shopId);
+  } catch (e: any) {
+    const msg = e?.message || "Failed to fetch orders";
+    console.error(`[Sync] Orders fetch failed: ${msg}`);
+    errors.push(`Orders: ${msg}`);
+  }
+
+  await delay(1000);
+
+  try {
+    productsData = await fetchProducts(admin, shopId);
+  } catch (e: any) {
+    const msg = e?.message || "Failed to fetch products";
+    console.error(`[Sync] Products fetch failed: ${msg}`);
+    errors.push(`Products: ${msg}`);
+  }
+
+  await delay(1000);
+
+  try {
+    customersData = await fetchCustomers(admin, shopId);
+  } catch (e: any) {
+    const msg = e?.message || "Failed to fetch customers";
+    console.error(`[Sync] Customers fetch failed: ${msg}`);
+    errors.push(`Customers: ${msg}`);
+  }
+
+  if (ordersData.length > 0) {
+    try {
+      await syncOrders(ordersData, shopId);
+    } catch (e: any) {
+      const msg = e?.message || "Failed to sync orders to database";
+      console.error(`[Sync] Orders DB sync failed: ${msg}`);
+      errors.push(`Orders DB: ${msg}`);
+    }
+  }
+
+  if (productsData.length > 0) {
+    try {
+      await syncProducts(productsData, shopId);
+    } catch (e: any) {
+      const msg = e?.message || "Failed to sync products to database";
+      console.error(`[Sync] Products DB sync failed: ${msg}`);
+      errors.push(`Products DB: ${msg}`);
+    }
+  }
+
+  if (customersData.length > 0) {
+    try {
+      await syncCustomers(customersData, shopId);
+    } catch (e: any) {
+      const msg = e?.message || "Failed to sync customers to database";
+      console.error(`[Sync] Customers DB sync failed: ${msg}`);
+      errors.push(`Customers DB: ${msg}`);
+    }
+  }
 
   await prisma.appSettings.upsert({
     where: { shopId },
@@ -27,6 +80,7 @@ export async function syncAllData(admin: any, shopId: string) {
     orders: ordersData.length,
     products: productsData.length,
     customers: customersData.length,
+    errors: errors.length > 0 ? errors : undefined,
   };
 }
 

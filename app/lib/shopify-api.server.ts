@@ -135,12 +135,48 @@ async function fetchAllPages(admin: any, query: string, variables: Record<string
   let pageCount = 0;
 
   while (hasNextPage && pageCount < maxPages) {
-    const vars = { ...variables, after: cursor };
-    const response = await admin.graphql(query, { variables: vars });
-    const json = await response.json();
+    const vars: Record<string, any> = { ...variables, after: cursor };
+    const response: Response = await admin.graphql(query, { variables: vars });
+
+    if (response.status === 403) {
+      const errorBody = await response.text();
+      console.error(`[Sync] GraphQL 403 Forbidden: ${errorBody}`);
+      throw new Error(`Shopify API access denied (403). Please re-authenticate the app. Details: ${errorBody}`);
+    }
+
+    if (response.status === 401) {
+      throw new Error("Session expired. Please refresh the page and try again.");
+    }
+
+    if (response.status === 429) {
+      const retryAfter = response.headers.get("Retry-After") || "10";
+      const waitMs = parseInt(retryAfter, 10) * 1000;
+      console.warn(`[Sync] Rate limited. Waiting ${retryAfter}s before retry...`);
+      await new Promise(resolve => setTimeout(resolve, waitMs));
+      continue;
+    }
+
+    if (!response.ok) {
+      const errorBody = await response.text();
+      console.error(`[Sync] GraphQL error ${response.status}: ${errorBody}`);
+      throw new Error(`Shopify API error (${response.status}): ${errorBody}`);
+    }
+
+    const json: any = await response.json();
+
+    if (json.errors?.length) {
+      const errorMessages = json.errors.map((e: any) => e.message).join("; ");
+      console.error(`[Sync] GraphQL response errors: ${errorMessages}`);
+      throw new Error(`Shopify GraphQL errors: ${errorMessages}`);
+    }
 
     const rootKey = Object.keys(json.data)[0];
-    const connection = json.data[rootKey];
+    const connection: any = json.data[rootKey];
+
+    if (!connection?.edges) {
+      console.warn(`[Sync] No edges found for ${rootKey}, returning empty result`);
+      break;
+    }
 
     allEdges.push(...connection.edges);
     hasNextPage = connection.pageInfo.hasNextPage;

@@ -268,7 +268,7 @@ export function ErrorBoundary() {
       detail = "The page you're looking for doesn't exist.";
     } else if (error.status === 401 || error.status === 403) {
       message = "Authentication Required";
-      detail = "Please open this app from your Shopify Admin.";
+      detail = "Your session may have expired. Please close and reopen this app from your Shopify Admin, or reinstall the app to restore access.";
     } else {
       message = `Error ${error.status}`;
       detail = typeof error.data === "string" ? error.data : (error.statusText || "An error occurred while loading this page.");

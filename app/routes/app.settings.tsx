@@ -36,13 +36,28 @@ export async function action({ request }: ActionFunctionArgs) {
     }
     if (intent === "sync") {
       const result = await syncAllData(admin, shopId);
+      if (result.errors && result.errors.length > 0) {
+        return {
+          success: false,
+          message: `Partial sync: ${result.orders} orders, ${result.products} products, ${result.customers} customers synced.`,
+          errors: result.errors,
+        };
+      }
       return { success: true, message: `Synced ${result.orders} orders, ${result.products} products, ${result.customers} customers` };
     }
     return { error: "Unknown action" };
   } catch (e: any) {
     if (e instanceof Response) return e;
-    console.error("Settings action error:", e?.message || e);
-    return { error: "Authentication failed. Please refresh and try again." };
+    const errorMessage = e?.message || "Unknown error";
+    console.error("Settings action error:", errorMessage);
+
+    if (errorMessage.includes("403") || errorMessage.includes("access denied")) {
+      return { error: "Permission denied. Please re-install the app to grant required permissions." };
+    }
+    if (errorMessage.includes("401") || errorMessage.includes("expired")) {
+      return { error: "Session expired. Please refresh the page and try again." };
+    }
+    return { error: `Sync failed: ${errorMessage}` };
   }
 }
 
@@ -110,6 +125,18 @@ export default function SettingsPage() {
         {result?.success && result.message?.includes("Synced") && (
           <div style={{ marginTop: 16, padding: "10px 16px", borderRadius: 8, background: "rgba(5, 150, 105, 0.06)", border: "1px solid rgba(5, 150, 105, 0.15)", fontSize: 13, color: "var(--brand-success)" }}>
             <strong>Sync Complete</strong> &mdash; {result.message}
+          </div>
+        )}
+        {result?.success === false && result.errors && (
+          <div style={{ marginTop: 16, padding: "10px 16px", borderRadius: 8, background: "rgba(234, 179, 8, 0.06)", border: "1px solid rgba(234, 179, 8, 0.15)", fontSize: 13, color: "#b45309" }}>
+            <strong>Partial Sync</strong> &mdash; {result.message}
+            {Array.isArray(result.errors) && (
+              <ul style={{ marginTop: 8, paddingLeft: 20, fontSize: 12 }}>
+                {result.errors.map((err: string, i: number) => (
+                  <li key={i}>{err}</li>
+                ))}
+              </ul>
+            )}
           </div>
         )}
         {result?.error && (
