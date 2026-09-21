@@ -1,0 +1,4 @@
+-- The SyncedOrderItem.id column uses a client-generated cuid() default
+-- (added via prisma.schema @default(cuid())), which requires no database
+-- change. This migration is recorded so that `prisma migrate deploy` keeps
+-- the migration history in sync on deployed environments.

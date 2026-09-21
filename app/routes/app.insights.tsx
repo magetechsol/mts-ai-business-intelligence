@@ -88,7 +88,9 @@ export async function action({ request }: ActionFunctionArgs) {
     });
     return { answer, question };
   } catch (e: any) {
-    if (e instanceof Response) return e;
+    if (e instanceof Response) {
+      return { error: "Your session has expired. Please close and reopen this app from your Shopify admin." };
+    }
     console.error("Insights action error:", e?.message || e);
     return { error: "Authentication failed. Please refresh and try again." };
   }

@@ -17,7 +17,7 @@ A Shopify embedded app that provides intelligent business analytics, AI-powered 
 - React Router v7 (SSR)
 - Shopify Polaris UI
 - Recharts (charts)
-- Prisma + SQLite
+- Prisma + PostgreSQL
 - OpenAI GPT-4 (optional)
 - TypeScript
 
@@ -120,6 +120,43 @@ The app works with or without an OpenAI API key:
 
 To enable AI insights, add your OpenAI API key in Settings or set the `OPENAI_API_KEY` environment variable.
 
+## Testing Instructions (for App Store Review)
+
+### Test Credentials
+
+Provide the Shopify development store credentials that grant full access to the app's feature set. Keep these credentials up to date.
+
+> Fill in the actual credentials below before submitting for review:
+
+| Store | URL |
+|-------|-----|
+| Development store | `https://REPLACE_WITH_YOUR_STORE.myshopify.com` |
+| Store owner email | `REPLACE_WITH_REVIEWER_EMAIL` |
+| Store owner password | `REPLACE_WITH_REVIEWER_PASSWORD` |
+
+> Note: For security, rotate these credentials immediately after review completes.
+
+### How to test
+
+1. **Install the app**
+   - Go to `https://admin.shopify.com/store/REPLACE_WITH_YOUR_STORE/apps`
+   - Click **MTS AI Business Intelligence** and **Install**
+   - Approve the requested permissions (`read_orders`, `read_products`, `read_customers`, `read_inventory`, `read_analytics`, `read_content`)
+
+2. **Sync store data** (core review requirement 2.1.4)
+   - Open **Settings → Data Sync** and click **Sync Now**
+   - Wait for the confirmation: "Synced N orders, N products, N customers"
+   - Verify a green **Sync Complete** message appears and "Last Sync" updates
+
+3. **Verify data accuracy**
+   - Open **Dashboard** — KPIs, revenue trend, and recent orders should match your store's data
+   - Open **Sales**, **Products**, **Customers**, and **Inventory** — data should be consistent with the Shopify admin
+   - If any dataset fails, a yellow **Partial Sync** panel lists the exact records that failed
+
+4. **AI Insights (Pro)**
+   - Go to the **Pricing** page and subscribe to the **Pro** plan ($29/mo)
+   - Open **AI Insights**, type a question (e.g. "Which products generated the most revenue this month?"), and confirm a response is returned
+
 ## Project Structure
 
 ```
@@ -152,7 +189,7 @@ prisma/
 
 ## Database
 
-The app uses SQLite via Prisma. The schema includes:
+The app uses PostgreSQL via Prisma (Neon Postgres in production). The schema includes:
 
 - **Session** — Shopify session storage
 - **SyncedOrder** — Synced order data with line items

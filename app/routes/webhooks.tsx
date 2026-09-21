@@ -139,6 +139,7 @@ async function handleOrderWebhook(shopId: string, body: any, topic: string, pris
   const order = body;
   if (!order?.id) return;
   const orderId = String(order.id);
+  const lineItems = order.line_items || [];
 
   if (topic.includes("create")) {
     await prisma.syncedOrder.upsert({
@@ -151,6 +152,7 @@ async function handleOrderWebhook(shopId: string, body: any, topic: string, pris
         totalTax: parseFloat(order.total_tax || "0"),
         totalDiscounts: parseFloat(order.total_discounts || "0"),
         tags: order.tags?.join(",") || null,
+        lineItemCount: lineItems.length,
         syncedAt: new Date(),
       },
       create: {
@@ -167,7 +169,7 @@ async function handleOrderWebhook(shopId: string, body: any, topic: string, pris
         totalTax: parseFloat(order.total_tax || "0"),
         totalDiscounts: parseFloat(order.total_discounts || "0"),
         currency: order.currency || "USD",
-        lineItemCount: order.line_items?.length || 0,
+        lineItemCount: lineItems.length,
         customerEmail: order.customer?.email || null,
         tags: order.tags?.join(",") || null,
       },
@@ -180,9 +182,28 @@ async function handleOrderWebhook(shopId: string, body: any, topic: string, pris
         fulfillmentStatus: order.fulfillment_status,
         totalPrice: parseFloat(order.total_price || "0"),
         tags: order.tags?.join(",") || null,
+        lineItemCount: lineItems.length,
         syncedAt: new Date(),
       },
     });
+  }
+
+  if (lineItems.length > 0) {
+    await prisma.$transaction([
+      prisma.syncedOrderItem.deleteMany({ where: { orderId } }),
+      prisma.syncedOrderItem.createMany({
+        data: lineItems.map((item: any) => ({
+          orderId,
+          productId: item.product_id ? String(item.product_id) : null,
+          productTitle: item.name || null,
+          variantId: item.variant_id ? String(item.variant_id) : null,
+          variantTitle: item.variant_title || null,
+          sku: item.sku || null,
+          quantity: item.quantity || 0,
+          price: parseFloat(item.price || "0"),
+        })),
+      }),
+    ]);
   }
 }
 

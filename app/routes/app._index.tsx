@@ -27,6 +27,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       orderBy: { processedAt: "desc" },
       take: 10,
     });
+    const settings = await prisma.appSettings.findUnique({ where: { shopId } });
     return {
       shopId, analytics,
       recentOrders: orders.map((o) => ({
@@ -34,7 +35,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
         financialStatus: o.financialStatus,
         processedAt: o.processedAt?.toISOString() || o.createdAt.toISOString(),
       })),
+      lastSyncAt: settings?.lastSyncAt?.toISOString() || null,
       isSample: false,
+      authError: null,
     };
   } catch (err: any) {
     if (err instanceof Response) throw err;
@@ -53,7 +56,7 @@ const kpiIcons: Record<string, string> = {
 };
 
 export default function Dashboard() {
-  const { analytics, recentOrders, isSample, authError } = useLoaderData<typeof loader>();
+  const { analytics, recentOrders, isSample, authError, lastSyncAt } = useLoaderData<typeof loader>();
   const [timeRange, setTimeRange] = useState("30d");
 
   const safeAnalytics = analytics || {
@@ -116,6 +119,19 @@ export default function Dashboard() {
         {isSample && (
           <div style={{ marginTop: 12, padding: "10px 16px", borderRadius: 8, background: "rgba(37, 99, 235, 0.06)", border: "1px solid rgba(37, 99, 235, 0.15)", fontSize: 13, color: "var(--brand-primary-dark)" }}>
             <strong>Demo Mode</strong> &mdash; {authError ? `Auth error: ${authError}` : "Showing sample data. Connect your Shopify store via Settings to see live analytics."}
+          </div>
+        )}
+        {!isSample && !lastSyncAt && (
+          <div style={{ marginTop: 12, padding: "16px 20px", borderRadius: 8, background: "rgba(217, 119, 6, 0.06)", border: "1px solid rgba(217, 119, 6, 0.2)", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+            <div style={{ fontSize: 13, color: "#92400e" }}>
+              <strong>No data synced yet.</strong> Sync your store data to see live analytics for orders, products, and customers.
+            </div>
+            <a href="/app/settings" target="_top" style={{ flexShrink: 0, padding: "8px 20px", borderRadius: 8, background: "linear-gradient(135deg, #3b82f6, #7c3aed)", color: "#fff", fontSize: 13, fontWeight: 600, textDecoration: "none" }}>Sync Your Store</a>
+          </div>
+        )}
+        {!isSample && lastSyncAt && (
+          <div style={{ marginTop: 12, fontSize: 13, color: "var(--brand-text-muted)" }}>
+            Last synced {new Date(lastSyncAt).toLocaleString()}
           </div>
         )}
       </div>

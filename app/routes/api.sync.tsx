@@ -46,7 +46,12 @@ export async function action({ request }: ActionFunctionArgs) {
       { status: 200, headers: { "Content-Type": "application/json" } }
     );
   } catch (error) {
-    if (error instanceof Response) return error;
+    if (error instanceof Response) {
+      return new Response(
+        JSON.stringify({ error: "Session expired. Please reopen the app from your Shopify admin." }),
+        { status: 401, headers: { "Content-Type": "application/json" } }
+      );
+    }
 
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
     console.error("Sync error:", errorMessage);

@@ -47,7 +47,9 @@ export async function action({ request }: ActionFunctionArgs) {
     }
     return { error: "Unknown action" };
   } catch (e: any) {
-    if (e instanceof Response) return e;
+    if (e instanceof Response) {
+      return { error: "Your session has expired. Please close and reopen this app from your Shopify admin." };
+    }
     const errorMessage = e?.message || "Unknown error";
     console.error("Settings action error:", errorMessage);
 
