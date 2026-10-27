@@ -17,6 +17,7 @@ export default [
   route("api/sync", "routes/api.sync.tsx"),
   route("api/ai", "routes/api.ai.tsx"),
   route("webhooks", "routes/webhooks.tsx"),
+  route("health", "routes/health.tsx"),
   route("privacy", "routes/privacy.tsx"),
   route("terms", "routes/terms.tsx"),
 ] satisfies RouteConfig;

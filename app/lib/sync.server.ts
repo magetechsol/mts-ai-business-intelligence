@@ -11,10 +11,12 @@ export async function syncAllData(admin: any, shopId: string) {
   let ordersData: any[] = [];
   let productsData: any[] = [];
   let customersData: any[] = [];
+  let fetchFailures = 0;
 
   try {
     ordersData = await fetchOrders(admin, thirtyDaysAgo, now, shopId);
   } catch (e: any) {
+    fetchFailures++;
     const msg = e?.message || "Failed to fetch orders";
     console.error(`[Sync] Orders fetch failed: ${msg}`);
     errors.push(`Orders: ${msg}`);
@@ -25,6 +27,7 @@ export async function syncAllData(admin: any, shopId: string) {
   try {
     productsData = await fetchProducts(admin, shopId);
   } catch (e: any) {
+    fetchFailures++;
     const msg = e?.message || "Failed to fetch products";
     console.error(`[Sync] Products fetch failed: ${msg}`);
     errors.push(`Products: ${msg}`);
@@ -35,6 +38,7 @@ export async function syncAllData(admin: any, shopId: string) {
   try {
     customersData = await fetchCustomers(admin, shopId);
   } catch (e: any) {
+    fetchFailures++;
     const msg = e?.message || "Failed to fetch customers";
     console.error(`[Sync] Customers fetch failed: ${msg}`);
     errors.push(`Customers: ${msg}`);
@@ -55,11 +59,22 @@ export async function syncAllData(admin: any, shopId: string) {
     errors.push(...result.errors);
   }
 
-  await prisma.appSettings.upsert({
-    where: { shopId },
-    update: { lastSyncAt: now },
-    create: { shopId, lastSyncAt: now },
-  });
+  // Only stamp lastSyncAt when at least one resource fetched successfully, so a
+  // total failure does not masquerade as a fresh sync and block a later retry.
+  if (fetchFailures < 3) {
+    await prisma.appSettings.upsert({
+      where: { shopId },
+      update: { lastSyncAt: now },
+      create: { shopId, lastSyncAt: now },
+    });
+  } else {
+    console.warn("[Sync] All fetches failed; lastSyncAt not updated so a retry can proceed.");
+    await prisma.appSettings.upsert({
+      where: { shopId },
+      update: {},
+      create: { shopId },
+    });
+  }
 
   return {
     orders: ordersData.length,

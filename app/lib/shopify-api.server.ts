@@ -128,6 +128,84 @@ const CUSTOMERS_QUERY = `
   }
 `;
 
+async function graphqlRequest(admin: any, query: string, variables: Record<string, any>) {
+  let response: Response;
+  try {
+    // admin.graphql returns a 200-wrapped Response on success and THROWS a
+    // Response (with the real upstream status) on non-2xx — handle both.
+    response = await admin.graphql(query, { variables });
+  } catch (thrown: any) {
+    if (thrown instanceof Response) {
+      const status = thrown.status;
+      let bodyText = "";
+      try {
+        bodyText = await thrown.text();
+      } catch {}
+      let parsed: any = null;
+      try {
+        parsed = JSON.parse(bodyText);
+      } catch {}
+      const apiMessage =
+        parsed?.errors?.[0]?.message || parsed?.message || bodyText || "Unknown error";
+
+      if (status === 429) {
+        throw Object.assign(new Error(`Shopify rate limit exceeded (429). Please retry shortly.`), { status: 429 });
+      }
+      if (status === 401) {
+        throw Object.assign(
+          new Error(`Shopify API unauthorized (401): ${apiMessage}. The access token may be invalid or revoked — try reopening the app to re-authenticate.`),
+          { status: 401 }
+        );
+      }
+      if (status === 403) {
+        throw Object.assign(
+          new Error(`Shopify API access denied (403): ${apiMessage}. A required scope is missing — re-install the app to grant permissions.`),
+          { status: 403 }
+        );
+      }
+      throw Object.assign(new Error(`Shopify API error (${status}): ${apiMessage}`), { status });
+    }
+    throw thrown;
+  }
+
+  // Success path: parse the 200-wrapped GraphQL payload.
+  const json: any = await response.json();
+
+  // GraphQL errors are returned as an OBJECT (not an array) inside a 200 body.
+  if (json?.errors) {
+    const errors = json.errors;
+    const list = Array.isArray(errors) ? errors : [errors];
+    const messages = list.map((e: any) => e?.message || JSON.stringify(e)).join("; ");
+    const networkStatusCode = Array.isArray(errors) ? undefined : errors?.networkStatusCode;
+    throw Object.assign(new Error(`Shopify GraphQL error: ${messages}`), { status: networkStatusCode });
+  }
+
+  return json;
+}
+
+async function graphqlRequestWithRetry(
+  admin: any,
+  query: string,
+  variables: Record<string, any>,
+  maxRetries = 3
+) {
+  let attempt = 0;
+  while (true) {
+    try {
+      return await graphqlRequest(admin, query, variables);
+    } catch (e: any) {
+      if (e?.status === 429 && attempt < maxRetries) {
+        const waitMs = Math.min(2000 * Math.pow(2, attempt), 15000);
+        console.warn(`[Sync] Rate limited. Retrying in ${waitMs}ms (attempt ${attempt + 1}/${maxRetries})...`);
+        await new Promise(resolve => setTimeout(resolve, waitMs));
+        attempt++;
+        continue;
+      }
+      throw e;
+    }
+  }
+}
+
 async function fetchAllPages(admin: any, query: string, variables: Record<string, any>, maxPages = 10) {
   const allEdges: any[] = [];
   let hasNextPage = true;
@@ -136,42 +214,15 @@ async function fetchAllPages(admin: any, query: string, variables: Record<string
 
   while (hasNextPage && pageCount < maxPages) {
     const vars: Record<string, any> = { ...variables, after: cursor };
-    const response: Response = await admin.graphql(query, { variables: vars });
+    const json = await graphqlRequestWithRetry(admin, query, vars);
 
-    if (response.status === 403) {
-      const errorBody = await response.text();
-      console.error(`[Sync] GraphQL 403 Forbidden: ${errorBody}`);
-      throw new Error(`Shopify API access denied (403). Please re-authenticate the app. Details: ${errorBody}`);
+    const data = json?.data;
+    if (!data) {
+      throw new Error("Shopify API returned no data in the response.");
     }
 
-    if (response.status === 401) {
-      throw new Error("Session expired. Please refresh the page and try again.");
-    }
-
-    if (response.status === 429) {
-      const retryAfter = response.headers.get("Retry-After") || "10";
-      const waitMs = parseInt(retryAfter, 10) * 1000;
-      console.warn(`[Sync] Rate limited. Waiting ${retryAfter}s before retry...`);
-      await new Promise(resolve => setTimeout(resolve, waitMs));
-      continue;
-    }
-
-    if (!response.ok) {
-      const errorBody = await response.text();
-      console.error(`[Sync] GraphQL error ${response.status}: ${errorBody}`);
-      throw new Error(`Shopify API error (${response.status}): ${errorBody}`);
-    }
-
-    const json: any = await response.json();
-
-    if (json.errors?.length) {
-      const errorMessages = json.errors.map((e: any) => e.message).join("; ");
-      console.error(`[Sync] GraphQL response errors: ${errorMessages}`);
-      throw new Error(`Shopify GraphQL errors: ${errorMessages}`);
-    }
-
-    const rootKey = Object.keys(json.data)[0];
-    const connection: any = json.data[rootKey];
+    const rootKey = Object.keys(data)[0];
+    const connection: any = data[rootKey];
 
     if (!connection?.edges) {
       console.warn(`[Sync] No edges found for ${rootKey}, returning empty result`);

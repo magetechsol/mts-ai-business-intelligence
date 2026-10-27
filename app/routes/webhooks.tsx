@@ -1,7 +1,23 @@
-import type { ActionFunctionArgs } from "react-router";
+import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import crypto from "crypto";
-import { authenticate } from "~/shopify.server";
 import prisma from "~/db.server";
+
+// Respond 200 to GET/HEAD so endpoint-reachability probes (and Shopify's
+// webhook verification check, which can hit the URL before sending a POST)
+// confirm the endpoint is live instead of receiving a 400/405.
+export async function loader(_args: LoaderFunctionArgs) {
+  return new Response("OK", { status: 200 });
+}
+
+// Constant-time comparison to avoid leaking HMAC validity via timing.
+function safeEqual(a: string, b: string): boolean {
+  const bufA = Buffer.from(a, "utf8");
+  const bufB = Buffer.from(b, "utf8");
+  if (bufA.length !== bufB.length) {
+    return false;
+  }
+  return crypto.timingSafeEqual(bufA, bufB);
+}
 
 export async function action({ request }: ActionFunctionArgs) {
   if (request.method !== "POST") {
@@ -16,57 +32,65 @@ export async function action({ request }: ActionFunctionArgs) {
     return new Response("Unauthorized", { status: 401 });
   }
 
+  // Read the raw body exactly once — HMAC must be computed over the raw bytes.
+  const rawBody = await request.text();
+
+  const secret = process.env.SHOPIFY_API_SECRET || "";
+  const generatedHmac = crypto
+    .createHmac("sha256", secret)
+    .update(rawBody, "utf8")
+    .digest("base64");
+
+  if (!safeEqual(generatedHmac, hmacHeader)) {
+    console.warn(`[Webhook] Invalid HMAC for topic=${topicHeader} shop=${shopHeader}`);
+    return new Response("Unauthorized", { status: 401 });
+  }
+
+  // HMAC is valid from here on. Always acknowledge with 200 so Shopify does not
+  // retry or flag the subscription as failing, even if processing throws.
   try {
-    const body = await request.text();
-    const secret = process.env.SHOPIFY_API_SECRET || "";
-    const generatedHmac = crypto
-      .createHmac("sha256", secret)
-      .update(body, "utf8")
-      .digest("base64");
-
-    if (generatedHmac !== hmacHeader) {
-      return new Response("Unauthorized", { status: 401 });
-    }
-
-    let session: any = null;
-    try {
-      const authResult = await authenticate.webhook(request);
-      session = authResult.session;
-    } catch {
-      session = null;
-    }
-
-    if (!session && shopHeader) {
-      session = await prisma.session.findFirst({ where: { shop: shopHeader } });
-    }
-
-    if (!session) {
-      return new Response("OK", { status: 200 });
-    }
-
-    const shopId = session.shop;
-    const bodyJson = JSON.parse(body);
-
-    if (topicHeader === "shop/redact") {
-      await handleShopRedact(shopId, bodyJson, prisma);
-    } else if (topicHeader === "customers/data_request") {
-      await handleCustomerDataRequest(shopId, bodyJson);
-    } else if (topicHeader === "customers/redact") {
-      await handleCustomerRedact(shopId, bodyJson, prisma);
-    } else if (topicHeader === "app_subscriptions/update") {
-      await handleSubscriptionUpdate(shopId, bodyJson, prisma);
-    } else if (topicHeader.includes("orders/")) {
-      await handleOrderWebhook(shopId, bodyJson, topicHeader, prisma);
-    } else if (topicHeader.includes("products/")) {
-      await handleProductWebhook(shopId, bodyJson, topicHeader, prisma);
-    } else if (topicHeader.includes("customers/")) {
-      await handleCustomerWebhook(shopId, bodyJson, topicHeader, prisma);
-    }
-
-    return new Response("OK", { status: 200 });
+    await processTopic(topicHeader, shopHeader, rawBody);
   } catch (error: any) {
-    console.error("Webhook error:", error?.message || error);
-    return new Response("OK", { status: 200 });
+    console.error(`[Webhook] ${topicHeader} processing error:`, error?.message || error);
+  }
+
+  return new Response("OK", { status: 200 });
+}
+
+async function processTopic(topic: string, shop: string, rawBody: string) {
+  if (!shop) return;
+  const shopId = shop;
+
+  // Delete the local session when the app is uninstalled so stale tokens are
+  // cleaned up and a reinstall runs a fresh OAuth flow.
+  if (topic === "app/uninstalled") {
+    await prisma.session.deleteMany({ where: { shop: shopId } });
+    console.log(`[Webhook] App uninstalled: ${shopId} (session removed)`);
+    return;
+  }
+
+  let bodyJson: any = null;
+  try {
+    bodyJson = JSON.parse(rawBody);
+  } catch {
+    bodyJson = null;
+  }
+  if (!bodyJson) return;
+
+  if (topic === "shop/redact") {
+    await handleShopRedact(shopId, bodyJson, prisma);
+  } else if (topic === "customers/data_request") {
+    await handleCustomerDataRequest(shopId, bodyJson);
+  } else if (topic === "customers/redact") {
+    await handleCustomerRedact(shopId, bodyJson, prisma);
+  } else if (topic === "app_subscriptions/update") {
+    await handleSubscriptionUpdate(shopId, bodyJson, prisma);
+  } else if (topic.includes("orders/")) {
+    await handleOrderWebhook(shopId, bodyJson, topic, prisma);
+  } else if (topic.includes("products/")) {
+    await handleProductWebhook(shopId, bodyJson, topic, prisma);
+  } else if (topic.includes("customers/")) {
+    await handleCustomerWebhook(shopId, bodyJson, topic, prisma);
   }
 }
 
